@@ -6,6 +6,11 @@
  */
 
 import {expectAssignable} from 'tsd-lite';
+import type {
+  GlobalConfig as SchemaGlobalConfig,
+  InitialOptions as SchemaInitialOptions,
+  ProjectConfig as SchemaProjectConfig,
+} from '@jest/schemas';
 import type {Config} from '@jest/types';
 
 expectAssignable<Config.InitialOptions>({
@@ -39,3 +44,12 @@ expectAssignable<Config.InitialOptions>({
     },
   ],
 });
+
+expectAssignable<Config.InitialOptions>({} as SchemaInitialOptions);
+expectAssignable<SchemaInitialOptions>({} as Config.InitialOptions);
+
+expectAssignable<Config.GlobalConfig>({} as SchemaGlobalConfig);
+expectAssignable<SchemaGlobalConfig>({} as Config.GlobalConfig);
+
+expectAssignable<Config.ProjectConfig>({} as SchemaProjectConfig);
+expectAssignable<SchemaProjectConfig>({} as Config.ProjectConfig);

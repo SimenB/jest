@@ -6,7 +6,7 @@
  */
 
 import type {ForegroundColor} from 'chalk';
-import type {ReportOptions} from 'istanbul-reports';
+import type {ReportOptions, ReportType} from 'istanbul-reports';
 import type {Arguments} from 'yargs';
 import type {SnapshotFormat} from '@jest/schemas';
 
@@ -37,18 +37,13 @@ export type HasteConfig = {
   hasteMapModulePath?: string;
 };
 
-export type CoverageReporterName = keyof ReportOptions;
+export type CoverageReporterWithOptions<K = ReportType> = K extends ReportType
+  ? ReportOptions[K] extends never
+    ? never
+    : [K, Partial<ReportOptions[K]>]
+  : never;
 
-export type CoverageReporterWithOptions<K = CoverageReporterName> =
-  K extends CoverageReporterName
-    ? ReportOptions[K] extends never
-      ? never
-      : [K, Partial<ReportOptions[K]>]
-    : never;
-
-export type CoverageReporters = Array<
-  CoverageReporterName | CoverageReporterWithOptions
->;
+export type CoverageReporters = Array<ReportType | CoverageReporterWithOptions>;
 
 export type ReporterConfig = [string, Record<string, unknown>];
 export type TransformerConfig = [string, Record<string, unknown>];
@@ -67,7 +62,7 @@ export type DefaultOptions = {
   clearMocks: boolean;
   collectCoverage: boolean;
   coveragePathIgnorePatterns: Array<string>;
-  coverageReporters: Array<CoverageReporterName>;
+  coverageReporters: Array<ReportType>;
   coverageProvider: CoverageProvider;
   detectLeaks: boolean;
   detectOpenHandles: boolean;

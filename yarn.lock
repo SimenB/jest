@@ -2764,6 +2764,7 @@ __metadata:
   resolution: "@jest/schemas@workspace:packages/jest-schemas"
   dependencies:
     "@sinclair/typebox": ^0.23.3
+    "@types/istanbul-reports": ^3.0.1
   languageName: unknown
   linkType: soft
 
@@ -4984,7 +4985,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/istanbul-reports@npm:^3.0.0":
+"@types/istanbul-reports@npm:^3.0.0, @types/istanbul-reports@npm:^3.0.1":
   version: 3.0.1
   resolution: "@types/istanbul-reports@npm:3.0.1"
   dependencies:
