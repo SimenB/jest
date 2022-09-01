@@ -44,7 +44,8 @@ const excludedPackages = new Set(['@jest/globals']);
   const packages = getPackages();
 
   const isTsPackage = p =>
-    fs.existsSync(path.resolve(p.packageDir, 'tsconfig.json'));
+    fs.existsSync(path.resolve(p.packageDir, 'tsconfig.json')) &&
+    p.packageDir.endsWith('jest-util');
 
   const packagesToBundle = packages.filter(
     p => isTsPackage(p) && !excludedPackages.has(p.pkg.name),

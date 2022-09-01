@@ -91,6 +91,7 @@
     "build:js": "node ./scripts/build.mjs",
     "build:ts": "node ./scripts/buildTs.mjs",
     "bundle:ts": "node ./scripts/bundleTs.mjs",
+    "win": "yarn build:ts && yarn bundle:ts",
     "check-copyright-headers": "node ./scripts/checkCopyrightHeaders.mjs",
     "clean-all": "yarn clean-e2e && yarn build-clean && rimraf './packages/*/node_modules' && rimraf './node_modules'",
     "clean-e2e": "node ./scripts/cleanE2e.mjs",

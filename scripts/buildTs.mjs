@@ -19,9 +19,9 @@ import {getPackages} from './buildUtils.mjs';
 (async () => {
   const packages = getPackages();
 
-  const packagesWithTs = packages.filter(p =>
-    fs.existsSync(path.resolve(p.packageDir, 'tsconfig.json')),
-  );
+  const packagesWithTs = packages
+    .filter(p => fs.existsSync(path.resolve(p.packageDir, 'tsconfig.json')))
+    .filter(p => p.packageDir.endsWith('jest-util'));
 
   const {stdout: allWorkspacesString} = await execa('yarn', [
     'workspaces',
