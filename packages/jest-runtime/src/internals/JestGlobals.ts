@@ -78,6 +78,7 @@ export class JestGlobals {
   private readonly cache = new Map<string, Jest>();
   private fakeTimersImpl: LegacyFakeTimers<unknown> | ModernFakeTimers | null;
   private envGlobalsOverride?: EnvironmentGlobals;
+  private cachedEnvGlobals?: EnvironmentGlobals;
 
   constructor(options: JestGlobalsOptions) {
     this.config = options.config;
@@ -115,21 +116,26 @@ export class JestGlobals {
     if (this.envGlobalsOverride) {
       return {...this.envGlobalsOverride};
     }
-    return {
-      afterAll: this.environment.global.afterAll,
-      afterEach: this.environment.global.afterEach,
-      beforeAll: this.environment.global.beforeAll,
-      beforeEach: this.environment.global.beforeEach,
-      describe: this.environment.global.describe,
-      expect: this.environment.global.expect as typeof expect,
-      fdescribe: this.environment.global.fdescribe,
-      fit: this.environment.global.fit,
-      it: this.environment.global.it,
-      test: this.environment.global.test,
-      xdescribe: this.environment.global.xdescribe,
-      xit: this.environment.global.xit,
-      xtest: this.environment.global.xtest,
-    };
+    let cached = this.cachedEnvGlobals;
+    if (cached === undefined) {
+      cached = {
+        afterAll: this.environment.global.afterAll,
+        afterEach: this.environment.global.afterEach,
+        beforeAll: this.environment.global.beforeAll,
+        beforeEach: this.environment.global.beforeEach,
+        describe: this.environment.global.describe,
+        expect: this.environment.global.expect as typeof expect,
+        fdescribe: this.environment.global.fdescribe,
+        fit: this.environment.global.fit,
+        it: this.environment.global.it,
+        test: this.environment.global.test,
+        xdescribe: this.environment.global.xdescribe,
+        xit: this.environment.global.xit,
+        xtest: this.environment.global.xtest,
+      };
+      this.cachedEnvGlobals = cached;
+    }
+    return {...cached};
   }
 
   cjsGlobals(from: string): JestGlobalsWithJest {
