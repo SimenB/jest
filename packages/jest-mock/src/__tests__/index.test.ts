@@ -2466,6 +2466,11 @@ describe('moduleMocker.clearMocksOnScope', () => {
     ).not.toThrow();
     expect(fn.mock.calls).toHaveLength(0);
   });
+
+  it('skips forged values that set _isMockFunction but lack mockClear', () => {
+    const forged = {_isMockFunction: true};
+    expect(() => moduleMocker.clearMocksOnScope({forged})).not.toThrow();
+  });
 });
 
 describe('mocked', () => {

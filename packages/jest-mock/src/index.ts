@@ -1404,13 +1404,14 @@ export class ModuleMocker {
   clearMocksOnScope(scope: object): void {
     for (const key of Object.keys(scope)) {
       const value = (scope as Record<string, unknown>)[key];
+      // `isMockFunction` checks the `_isMockFunction === true` marker; the
+      // extra `typeof mockClear === 'function'` guards against forged values
+      // that set the marker but aren't real Jest mocks.
       if (
-        ((typeof value === 'object' && value !== null) ||
-          typeof value === 'function') &&
-        '_isMockFunction' in value &&
-        (value as {_isMockFunction: unknown})._isMockFunction === true
+        this.isMockFunction(value) &&
+        typeof (value as Mock).mockClear === 'function'
       ) {
-        (value as unknown as Mock).mockClear();
+        (value as Mock).mockClear();
       }
     }
   }
