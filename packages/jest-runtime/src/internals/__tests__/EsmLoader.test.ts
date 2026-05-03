@@ -62,7 +62,10 @@ function makeLoader(overrides: Partial<Stubs> = {}) {
     mockState: {
       getEsmFactory: jest.fn(() => undefined),
       getEsmModuleId: jest.fn((from, name) => `${from}\0${name}`),
-      shouldMockEsmSync: jest.fn(() => false),
+      shouldMockEsmSync: jest.fn((_from, name) => ({
+        moduleID: name,
+        shouldMock: false,
+      })),
     } as unknown as jest.Mocked<MockState>,
     registries: {
       getActiveEsmRegistry: jest.fn(() => esmRegistry),
@@ -217,7 +220,10 @@ describe('EsmLoader.tryLoadGraphSync', () => {
         mockState: {
           getEsmFactory: jest.fn(() => undefined),
           getEsmModuleId: jest.fn(() => '/dep.mjs'),
-          shouldMockEsmSync: jest.fn(() => true),
+          shouldMockEsmSync: jest.fn((_from, name) => ({
+            moduleID: name,
+            shouldMock: true,
+          })),
         } as unknown as jest.Mocked<MockState>,
       });
       const erroredMock = new SyntheticModule(
@@ -395,7 +401,10 @@ describe('EsmLoader mock dispatch', () => {
         mockState: {
           getEsmFactory: jest.fn(() => () => Promise.resolve({})),
           getEsmModuleId: jest.fn(() => 'mid'),
-          shouldMockEsmSync: jest.fn(() => true),
+          shouldMockEsmSync: jest.fn((_from, name) => ({
+            moduleID: name,
+            shouldMock: true,
+          })),
         } as unknown as jest.Mocked<MockState>,
       });
       stubs.transformCache.transform.mockReturnValue(
@@ -415,7 +424,10 @@ describe('EsmLoader mock dispatch', () => {
         mockState: {
           getEsmFactory: jest.fn(() => () => Promise.resolve({})),
           getEsmModuleId: jest.fn(() => 'mid'),
-          shouldMockEsmSync: jest.fn(() => true),
+          shouldMockEsmSync: jest.fn((_from, name) => ({
+            moduleID: name,
+            shouldMock: true,
+          })),
         } as unknown as jest.Mocked<MockState>,
       });
       stubs.transformCache.transform.mockReturnValue(
@@ -439,7 +451,10 @@ describe('EsmLoader mock dispatch', () => {
         mockState: {
           getEsmFactory: jest.fn(() => factory),
           getEsmModuleId: jest.fn(() => 'mid'),
-          shouldMockEsmSync: jest.fn(() => true),
+          shouldMockEsmSync: jest.fn((_from, name) => ({
+            moduleID: name,
+            shouldMock: true,
+          })),
         } as unknown as jest.Mocked<MockState>,
       });
       stubs.transformCache.transform.mockReturnValue(
