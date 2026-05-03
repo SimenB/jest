@@ -17,6 +17,8 @@ const unmockRegExpCache = new WeakMap<Config.ProjectConfig, RegExp>();
 const transitiveCacheKey = (from: string, moduleID: string) =>
   `${from}\0${moduleID}`;
 
+type MockDecision = {shouldMock: boolean; moduleID: string};
+
 export class MockState {
   private readonly resolution: Resolution;
   private readonly unmockList: RegExp | undefined;
@@ -57,22 +59,28 @@ export class MockState {
     this.unmockList = unmock;
   }
 
-  shouldMockCjs(from: string, moduleName: string): boolean {
+  shouldMockCjs(from: string, moduleName: string): MockDecision {
     const moduleID = this.resolution.getCjsModuleId(
       this.virtualCjsMocks,
       from,
       moduleName,
     );
-    return this.decideSync(from, moduleName, moduleID, 'cjs');
+    return {
+      moduleID,
+      shouldMock: this.decideSync(from, moduleName, moduleID, 'cjs'),
+    };
   }
 
-  shouldMockEsmSync(from: string, moduleName: string): boolean {
+  shouldMockEsmSync(from: string, moduleName: string): MockDecision {
     const moduleID = this.resolution.getEsmModuleId(
       this.virtualEsmMocks,
       from,
       moduleName,
     );
-    return this.decideSync(from, moduleName, moduleID, 'esm');
+    return {
+      moduleID,
+      shouldMock: this.decideSync(from, moduleName, moduleID, 'esm'),
+    };
   }
 
   async shouldMockEsmAsync(from: string, moduleName: string): Promise<boolean> {

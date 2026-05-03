@@ -59,26 +59,26 @@ describe('MockState', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: false}));
       mockState.markExplicitCjsMock('/from', './a');
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(true);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(true);
     });
 
     test('explicit unmock wins over automock (CJS)', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: true}));
       mockState.unmockCjs('/from', './a');
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(false);
     });
 
     test('returns false when automock is off and no explicit mark', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: false}));
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(false);
     });
 
     test('returns true under automock for a normal module', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: true}));
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(true);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(true);
     });
 
     test('caches the decision (second call hits cache, no extra resolveCjs)', () => {
@@ -89,6 +89,25 @@ describe('MockState', () => {
       expect(stub.resolveCjs).toHaveBeenCalledTimes(1);
     });
 
+    test('shouldMockCjs computes moduleID exactly once and returns it', () => {
+      const {resolution, stub} = makeResolution();
+      const mockState = new MockState(resolution, config({automock: false}));
+      const result = mockState.shouldMockCjs('/from', './a');
+      expect(stub.getCjsModuleId).toHaveBeenCalledTimes(1);
+      // The returned moduleID is what callers would otherwise have to recompute
+      // — having it on the response saves a second `getCjsModuleId` call on
+      // the requireModuleOrMock → requireMock dispatch path.
+      expect(result.moduleID).toBe('cjs:/from:./a');
+    });
+
+    test('shouldMockEsmSync computes moduleID exactly once and returns it', () => {
+      const {resolution, stub} = makeResolution();
+      const mockState = new MockState(resolution, config({automock: false}));
+      const result = mockState.shouldMockEsmSync('/from', './a');
+      expect(stub.getEsmModuleId).toHaveBeenCalledTimes(1);
+      expect(result.moduleID).toBe('esm:/from:./a');
+    });
+
     test('returns true on resolve failure if a manual mock exists', () => {
       const {resolution, stub} = makeResolution();
       stub.resolveCjs.mockImplementation(() => {
@@ -96,7 +115,7 @@ describe('MockState', () => {
       });
       stub.getCjsMockModule.mockReturnValue('/manual/mock/path');
       const mockState = new MockState(resolution, config({automock: true}));
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(true);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(true);
     });
 
     test('rethrows resolve error when no manual mock exists', () => {
@@ -119,14 +138,14 @@ describe('MockState', () => {
           unmockedModulePathPatterns: ['/resolved/cjs/'],
         }),
       );
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(false);
     });
 
     test('returns false for core modules even under automock', () => {
       const {resolution, stub} = makeResolution();
       stub.isCoreModule.mockReturnValue(true);
       const mockState = new MockState(resolution, config({automock: true}));
-      expect(mockState.shouldMockCjs('/from', 'fs')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', 'fs').shouldMock).toBe(false);
     });
 
     test('shouldMockEsmSync uses ESM resolver and ESM explicit map', () => {
@@ -159,7 +178,7 @@ describe('MockState', () => {
       const moduleID = mockState.getCjsModuleId('/from', './a');
       expect(mockState.hasCjsFactory(moduleID)).toBe(true);
       expect(mockState.getCjsFactory(moduleID)).toBe(factory);
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(true);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(true);
     });
 
     test('setModuleMock registers an ESM factory', () => {
@@ -185,16 +204,16 @@ describe('MockState', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: true}));
       mockState.disableAutomock();
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(false);
       mockState.enableAutomock();
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(true);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(true);
     });
 
     test('deepUnmock prevents transitive automock for descendants', () => {
       const {resolution} = makeResolution();
       const mockState = new MockState(resolution, config({automock: true}));
       mockState.deepUnmock('/from', './a');
-      expect(mockState.shouldMockCjs('/from', './a')).toBe(false);
+      expect(mockState.shouldMockCjs('/from', './a').shouldMock).toBe(false);
     });
 
     test('addOnGenerateMock + notifyMockGenerated runs callbacks in order', () => {

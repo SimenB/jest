@@ -538,12 +538,14 @@ export class EsmLoader {
 
     const [specifierPath, query = ''] = specifier.split('?');
 
-    if (
-      this.mockState.shouldMockEsmSync(referencingIdentifier, specifierPath)
-    ) {
+    const {shouldMock, moduleID} = this.mockState.shouldMockEsmSync(
+      referencingIdentifier,
+      specifierPath,
+    );
+    if (shouldMock) {
       const mocked = this.importMockSync(
-        referencingIdentifier,
         specifierPath,
+        moduleID,
         context,
         scratch,
         mode,
@@ -594,14 +596,12 @@ export class EsmLoader {
   }
 
   private importMockSync(
-    from: string,
     moduleName: string,
+    moduleID: string,
     context: VMContext,
     scratch: Map<string, ScratchEntry>,
     mode: SyncEsmMode,
   ): {cacheKey: string} | null {
-    const moduleID = this.mockState.getEsmModuleId(from, moduleName);
-
     const existing = this.registries.getModuleMock(moduleID);
     if (existing instanceof Promise) return null;
     if (existing) {

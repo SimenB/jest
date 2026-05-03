@@ -399,8 +399,18 @@ export default class Runtime {
   }
 
   requireMock<T = unknown>(from: string, moduleName: string): T {
-    const moduleID = this.mockState.getCjsModuleId(from, moduleName);
+    return this._requireMockWithId<T>(
+      from,
+      moduleName,
+      this.mockState.getCjsModuleId(from, moduleName),
+    );
+  }
 
+  private _requireMockWithId<T>(
+    from: string,
+    moduleName: string,
+    moduleID: string,
+  ): T {
     if (this.registries.hasMock(moduleID)) {
       return this.registries.getMock(moduleID) as T;
     }
@@ -468,11 +478,14 @@ export default class Runtime {
     }
 
     try {
-      if (this.mockState.shouldMockCjs(from, moduleName)) {
-        return this.requireMock<T>(from, moduleName);
-      } else {
-        return this.requireModule<T>(from, moduleName);
+      const {shouldMock, moduleID} = this.mockState.shouldMockCjs(
+        from,
+        moduleName,
+      );
+      if (shouldMock) {
+        return this._requireMockWithId<T>(from, moduleName, moduleID);
       }
+      return this.requireModule<T>(from, moduleName);
     } catch (error) {
       const moduleNotFound = Resolver.tryCastModuleNotFoundError(error);
       if (moduleNotFound) {
