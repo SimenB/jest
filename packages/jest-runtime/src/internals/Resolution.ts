@@ -19,6 +19,7 @@ export class Resolution {
   private readonly extensionsToTreatAsEsm: ReadonlyArray<string>;
   private readonly cjsCache = new Map<string, string>();
   private readonly esmCache = new Map<string, string>();
+  private readonly manualMockCache = new Map<string, string | null>();
 
   constructor(
     resolver: Resolver,
@@ -135,6 +136,16 @@ export class Resolution {
   //    respective subDir{1,2} directories and expects a manual mock
   //    corresponding to that particular my_module.js file.
   findManualMock(from: string, moduleName: string): string | null {
+    const cacheKey = `${from}\0${moduleName}`;
+    let result = this.manualMockCache.get(cacheKey);
+    if (result === undefined) {
+      result = this.computeManualMock(from, moduleName);
+      this.manualMockCache.set(cacheKey, result);
+    }
+    return result;
+  }
+
+  private computeManualMock(from: string, moduleName: string): string | null {
     if (this.isCoreModule(moduleName)) {
       return this.getCjsMockModule(
         from,
@@ -202,6 +213,7 @@ export class Resolution {
   clear(): void {
     this.cjsCache.clear();
     this.esmCache.clear();
+    this.manualMockCache.clear();
   }
 
   private resolveCached(

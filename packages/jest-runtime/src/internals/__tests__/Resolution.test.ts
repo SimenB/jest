@@ -5,9 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import * as fs from 'graceful-fs';
 import {testWithVmEsm} from '@jest/test-utils';
 import type Resolver from 'jest-resolve';
 import {Resolution} from '../Resolution';
+
+jest.mock('graceful-fs', () => ({
+  ...jest.requireActual<typeof import('graceful-fs')>('graceful-fs'),
+  existsSync: jest.fn(() => false),
+}));
 
 const CJS = ['require', 'node', 'default'];
 const ESM = ['import', 'default'];
@@ -252,6 +258,99 @@ describe('Resolution', () => {
         'foo',
         {conditions: CJS, paths: undefined},
       );
+    });
+  });
+
+  describe('findManualMock', () => {
+    const existsSync = fs.existsSync as jest.MockedFunction<
+      typeof fs.existsSync
+    >;
+
+    beforeEach(() => {
+      existsSync.mockReset();
+      existsSync.mockReturnValue(false);
+    });
+
+    test('returns the root manual mock for a non-core specifier', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => '/root-mock.js'),
+      });
+      const r = new Resolution(resolver, [], []);
+      expect(r.findManualMock('/from.js', 'lib')).toBe('/root-mock.js');
+    });
+
+    test('uses normalized core module specifier when isCoreModule is true', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => '/core-mock.js'),
+        isCoreModule: jest.fn(() => true),
+        normalizeCoreModuleSpecifier: jest.fn(() => 'fs'),
+      });
+      const r = new Resolution(resolver, [], []);
+      expect(r.findManualMock('/from.js', 'node:fs')).toBe('/core-mock.js');
+      expect(resolver.normalizeCoreModuleSpecifier).toHaveBeenCalledWith(
+        'node:fs',
+      );
+      expect(resolver.getMockModule).toHaveBeenCalledWith('/from.js', 'fs', {
+        conditions: CJS,
+      });
+    });
+
+    test('falls back to sibling __mocks__ entry when fs.existsSync agrees', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => null),
+        resolveModule: jest.fn(() => '/path/to/lib.js'),
+      });
+      existsSync.mockReturnValue(true);
+      const r = new Resolution(resolver, [], []);
+      expect(r.findManualMock('/from.js', 'lib')).toBe(
+        '/path/to/__mocks__/lib.js',
+      );
+      expect(existsSync).toHaveBeenCalledWith('/path/to/__mocks__/lib.js');
+    });
+
+    test('returns null when neither root nor sibling mock exists', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => null),
+        resolveModule: jest.fn(() => '/path/to/lib.js'),
+      });
+      const r = new Resolution(resolver, [], []);
+      expect(r.findManualMock('/from.js', 'lib')).toBeNull();
+    });
+
+    test('caches the result so repeated calls do not re-stat', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => null),
+        resolveModule: jest.fn(() => '/path/to/lib.js'),
+      });
+      const r = new Resolution(resolver, [], []);
+      r.findManualMock('/from.js', 'lib');
+      r.findManualMock('/from.js', 'lib');
+      r.findManualMock('/from.js', 'lib');
+      expect(existsSync).toHaveBeenCalledTimes(1);
+      expect(resolver.getMockModule).toHaveBeenCalledTimes(1);
+    });
+
+    test('caches negative results (null) too', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => null),
+        resolveModule: jest.fn(() => '/path/to/lib.js'),
+      });
+      const r = new Resolution(resolver, [], []);
+      expect(r.findManualMock('/from.js', 'lib')).toBeNull();
+      expect(r.findManualMock('/from.js', 'lib')).toBeNull();
+      expect(existsSync).toHaveBeenCalledTimes(1);
+    });
+
+    test('clear() drops the manual-mock cache', () => {
+      const resolver = makeResolver({
+        getMockModule: jest.fn(() => null),
+        resolveModule: jest.fn(() => '/path/to/lib.js'),
+      });
+      const r = new Resolution(resolver, [], []);
+      r.findManualMock('/from.js', 'lib');
+      r.clear();
+      r.findManualMock('/from.js', 'lib');
+      expect(existsSync).toHaveBeenCalledTimes(2);
     });
   });
 
