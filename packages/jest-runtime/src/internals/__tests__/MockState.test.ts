@@ -6,7 +6,9 @@
  */
 
 import {makeProjectConfig} from '@jest/test-utils';
-import {MockState} from '../MockState';
+import type {ModuleMocker} from 'jest-mock';
+import {MockState, generateMock} from '../MockState';
+import type {ModuleRegistries} from '../ModuleRegistries';
 import type {Resolution} from '../Resolution';
 
 type ResolutionStub = {
@@ -15,6 +17,7 @@ type ResolutionStub = {
     | 'getEsmModuleId'
     | 'getEsmModuleIdAsync'
     | 'resolveCjs'
+    | 'resolveCjsStub'
     | 'resolveEsm'
     | 'resolveEsmAsync'
     | 'getCjsMockModule'
@@ -44,6 +47,7 @@ function makeResolution(): {
     getModulePath: jest.fn((from, name) => `${from}/${name}`),
     isCoreModule: jest.fn(() => false),
     resolveCjs: jest.fn((_from, name) => `/resolved/cjs/${name}`),
+    resolveCjsStub: jest.fn(() => null),
     resolveEsm: jest.fn((_from, name) => `/resolved/esm/${name}`),
     resolveEsmAsync: jest.fn(async (_from, name) => `/resolved/esm/${name}`),
   };
@@ -267,5 +271,111 @@ describe('MockState', () => {
       expect(mockState.hasMockMetadata('/path')).toBe(false);
       expect(mockState.notifyMockGenerated('/path', 'x')).toBe('x');
     });
+  });
+});
+
+// `generateMock` takes (from, name, options); these tests stub every member of
+// that options bag — `mockState` itself is mocked here, unlike the decision
+// tests above where MockState is the real subject. The Resolution stub from
+// `makeResolution()` is reused.
+
+type GenerateMockOptionStubs = {
+  resolution: jest.Mocked<Resolution>;
+  mockState: jest.Mocked<MockState>;
+  moduleMocker: jest.Mocked<ModuleMocker>;
+  registries: jest.Mocked<ModuleRegistries>;
+  requireModule: jest.MockedFunction<(from: string, name: string) => unknown>;
+};
+
+function makeGenerateMockOptions(
+  overrides: Partial<GenerateMockOptionStubs> = {},
+): GenerateMockOptionStubs {
+  return {
+    mockState: {
+      getMockMetadata: jest.fn(() => ({})),
+      hasMockMetadata: jest.fn(() => false),
+      notifyMockGenerated: jest.fn(<T>(_path: string, mock: T): T => mock),
+      setMockMetadata: jest.fn(),
+    } as unknown as jest.Mocked<MockState>,
+    moduleMocker: {
+      generateFromMetadata: jest.fn(() => ({generated: true})),
+      getMetadata: jest.fn(() => ({type: 'object'})),
+    } as unknown as jest.Mocked<ModuleMocker>,
+    registries: {
+      withScratchRegistries: jest.fn(<T>(fn: () => T): T => fn()),
+    } as unknown as jest.Mocked<ModuleRegistries>,
+    requireModule: jest.fn(() => ({real: 'export'})) as jest.MockedFunction<
+      (from: string, name: string) => unknown
+    >,
+    resolution: makeResolution().resolution as jest.Mocked<Resolution>,
+    ...overrides,
+  };
+}
+
+describe('generateMock', () => {
+  test('uses resolveCjsStub when available, falling back to resolveCjs', () => {
+    const stubs = makeGenerateMockOptions({
+      resolution: {
+        resolveCjs: jest.fn(),
+        resolveCjsStub: jest.fn(() => '/stub.js'),
+      } as unknown as jest.Mocked<Resolution>,
+    });
+    generateMock('/from.js', 'foo', stubs);
+    expect(stubs.resolution.resolveCjsStub).toHaveBeenCalledWith(
+      '/from.js',
+      'foo',
+    );
+    expect(stubs.resolution.resolveCjs).not.toHaveBeenCalled();
+  });
+
+  test('seeds metadata before requiring (handles circular auto-mocks)', () => {
+    const stubs = makeGenerateMockOptions();
+    const order: Array<string> = [];
+    stubs.mockState.setMockMetadata = jest.fn(() => {
+      order.push('setMeta');
+    });
+    stubs.requireModule = jest.fn(() => {
+      order.push('require');
+      return {};
+    });
+
+    generateMock('/from.js', 'foo', stubs);
+    // First setMockMetadata (the empty seed) runs before requireModule.
+    expect(order[0]).toBe('setMeta');
+    expect(order.indexOf('require')).toBeGreaterThan(0);
+  });
+
+  test('runs requireModule inside scratch registries', () => {
+    const stubs = makeGenerateMockOptions();
+    generateMock('/from.js', 'foo', stubs);
+    expect(stubs.registries.withScratchRegistries).toHaveBeenCalledTimes(1);
+    expect(stubs.requireModule).toHaveBeenCalledWith('/from.js', 'foo');
+  });
+
+  test('skips re-running when metadata is already cached', () => {
+    const stubs = makeGenerateMockOptions();
+    stubs.mockState.hasMockMetadata = jest.fn(() => true);
+    generateMock('/from.js', 'foo', stubs);
+    expect(stubs.requireModule).not.toHaveBeenCalled();
+    expect(stubs.registries.withScratchRegistries).not.toHaveBeenCalled();
+  });
+
+  test('throws when getMetadata returns null on the loaded exports', () => {
+    const stubs = makeGenerateMockOptions();
+    // First call (seed) returns metadata; second (on real exports) returns null.
+    let count = 0;
+    stubs.moduleMocker.getMetadata = jest.fn(() =>
+      ++count === 1 ? {type: 'object' as const} : null,
+    );
+    expect(() => generateMock('/from.js', 'foo', stubs)).toThrow(
+      /Failed to get mock metadata/,
+    );
+  });
+
+  test('returns the result of notifyMockGenerated', () => {
+    const sentinel = {sentinel: true};
+    const stubs = makeGenerateMockOptions();
+    stubs.mockState.notifyMockGenerated = jest.fn(() => sentinel) as any;
+    expect(generateMock('/from.js', 'foo', stubs)).toBe(sentinel);
   });
 });

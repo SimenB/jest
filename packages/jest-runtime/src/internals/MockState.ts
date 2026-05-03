@@ -7,7 +7,8 @@
 
 import * as path from 'node:path';
 import type {Config} from '@jest/types';
-import type {MockMetadata} from 'jest-mock';
+import type {MockMetadata, ModuleMocker} from 'jest-mock';
+import type {ModuleRegistries} from './ModuleRegistries';
 import type {Resolution} from './Resolution';
 
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
@@ -395,4 +396,56 @@ export class MockState {
     this.virtualEsmMocks.clear();
     this.onGenerateMockCallbacks.clear();
   }
+}
+
+interface GenerateMockOptions {
+  resolution: Resolution;
+  mockState: MockState;
+  moduleMocker: ModuleMocker;
+  registries: ModuleRegistries;
+  // The real-module require used to populate metadata. Wired to
+  // `CjsLoader.requireModule` at construction time. Wraps in scratch
+  // registries to avoid polluting the real module/mock caches.
+  requireModule: (from: string, moduleName: string) => unknown;
+}
+
+export function generateMock<T>(
+  from: string,
+  moduleName: string,
+  options: GenerateMockOptions,
+): T {
+  const {resolution, mockState, moduleMocker, registries, requireModule} =
+    options;
+
+  const modulePath =
+    resolution.resolveCjsStub(from, moduleName) ||
+    resolution.resolveCjs(from, moduleName);
+
+  if (!mockState.hasMockMetadata(modulePath)) {
+    // This allows us to handle circular dependencies while generating an
+    // automock
+    mockState.setMockMetadata(modulePath, moduleMocker.getMetadata({}) || {});
+
+    // In order to avoid it being possible for automocking to potentially
+    // cause side-effects within the module environment, we need to execute
+    // the module in isolation. This could cause issues if the module being
+    // mocked has calls into side-effectful APIs on another module.
+    const moduleExports = registries.withScratchRegistries(() =>
+      requireModule(from, moduleName),
+    );
+
+    const mockMetadata = moduleMocker.getMetadata(moduleExports);
+    if (mockMetadata == null) {
+      throw new Error(
+        `Failed to get mock metadata: ${modulePath}\n\n` +
+          'See: https://jestjs.io/docs/manual-mocks#content',
+      );
+    }
+    mockState.setMockMetadata(modulePath, mockMetadata);
+  }
+
+  const moduleMock = moduleMocker.generateFromMetadata<T>(
+    mockState.getMockMetadata(modulePath)! as MockMetadata<T>,
+  );
+  return mockState.notifyMockGenerated(modulePath, moduleMock);
 }

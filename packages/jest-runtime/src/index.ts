@@ -35,7 +35,7 @@ import {CjsLoader} from './internals/CjsLoader';
 import {EsmLoader} from './internals/EsmLoader';
 import {FileCache} from './internals/FileCache';
 import {JestGlobals} from './internals/JestGlobals';
-import {MockState} from './internals/MockState';
+import {MockState, generateMock} from './internals/MockState';
 import {ModuleExecutor} from './internals/ModuleExecutor';
 import {ModuleRegistries} from './internals/ModuleRegistries';
 import {Resolution} from './internals/Resolution';
@@ -46,7 +46,6 @@ import {
   type TransformOptions,
 } from './internals/TransformCache';
 import {V8CoverageCollector} from './internals/V8CoverageCollector';
-import {generateMock} from './internals/automock';
 import {CoreModuleProvider, RequireBuilder} from './internals/cjsRequire';
 import type {InitialModule, ModuleRegistry} from './internals/moduleTypes';
 import {runtimeSupportsVmModules} from './internals/nodeCapabilities';
