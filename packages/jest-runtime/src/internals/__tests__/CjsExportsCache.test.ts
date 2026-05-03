@@ -57,8 +57,14 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache(),
     });
 
-    expect([...cache.getExportsOf('/m.js')]).toEqual(['foo', 'bar']);
-    expect([...cache.getExportsOf('/m.js')]).toEqual(['foo', 'bar']);
+    expect([...cache.getExportsOf('/from.js', '/m.js')]).toEqual([
+      'foo',
+      'bar',
+    ]);
+    expect([...cache.getExportsOf('/from.js', '/m.js')]).toEqual([
+      'foo',
+      'bar',
+    ]);
     expect(readFile).toHaveBeenCalledTimes(1);
   });
 
@@ -73,7 +79,9 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache('module.exports.transformed = 1;'),
     });
 
-    expect([...cache.getExportsOf('/m.js')]).toEqual(['transformed']);
+    expect([...cache.getExportsOf('/from.js', '/m.js')]).toEqual([
+      'transformed',
+    ]);
     expect(readFile).not.toHaveBeenCalled();
   });
 
@@ -91,7 +99,10 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache(),
     });
 
-    expect([...cache.getExportsOf('/a.js')].sort()).toEqual(['a', 'b']);
+    expect([...cache.getExportsOf('/from.js', '/a.js')].sort()).toEqual([
+      'a',
+      'b',
+    ]);
   });
 
   test('loads core-module re-exports via the loadCoreReexport callback', () => {
@@ -111,7 +122,7 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache(),
     });
 
-    expect([...cache.getExportsOf('/m.js')].sort()).toEqual([
+    expect([...cache.getExportsOf('/from.js', '/m.js')].sort()).toEqual([
       'readFileSync',
       'writeFileSync',
     ]);
@@ -130,8 +141,10 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache(),
     });
 
-    expect([...cache.getExportsOf('/addon.node')]).toEqual(['nativeFn']);
-    expect(loadNativeAddon).toHaveBeenCalledWith('/addon.node');
+    expect([...cache.getExportsOf('/from.js', '/addon.node')]).toEqual([
+      'nativeFn',
+    ]);
+    expect(loadNativeAddon).toHaveBeenCalledWith('/from.js', '/addon.node');
     expect(readFile).not.toHaveBeenCalled();
   });
 
@@ -148,9 +161,9 @@ describe('CjsExportsCache', () => {
       transformCache: makeTransformCache(),
     });
 
-    cache.getExportsOf('/m.js');
+    cache.getExportsOf('/from.js', '/m.js');
     cache.clear();
-    cache.getExportsOf('/m.js');
+    cache.getExportsOf('/from.js', '/m.js');
     expect(readFile).toHaveBeenCalledTimes(2);
   });
 });

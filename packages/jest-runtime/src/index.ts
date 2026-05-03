@@ -156,9 +156,9 @@ export default class Runtime {
     this.mockState = new MockState(this._resolution, config);
     this.cjsExportsCache = new CjsExportsCache({
       fileCache: this.fileCache,
-      loadCoreReexport: (fromPath, coreName) =>
-        this.requireModule(fromPath, coreName),
-      loadNativeAddon: modulePath => this.requireModuleOrMock('', modulePath),
+      loadCoreReexport: (from, coreName) => this.requireModule(from, coreName),
+      loadNativeAddon: (from, modulePath) =>
+        this.requireModuleOrMock(from, modulePath),
       resolution: this._resolution,
       transformCache: this.transformCache,
     });

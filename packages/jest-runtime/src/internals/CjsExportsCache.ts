@@ -15,8 +15,8 @@ interface CjsExportsCacheOptions {
   resolution: Resolution;
   fileCache: FileCache;
   transformCache: TransformCache;
-  loadNativeAddon: (modulePath: string) => unknown;
-  loadCoreReexport: (fromPath: string, coreName: string) => unknown;
+  loadNativeAddon: (from: string, modulePath: string) => unknown;
+  loadCoreReexport: (from: string, coreName: string) => unknown;
 }
 
 // Computes (and caches) the named exports of a CJS module by static analysis
@@ -29,9 +29,12 @@ export class CjsExportsCache {
   private readonly resolution: Resolution;
   private readonly fileCache: FileCache;
   private readonly transformCache: TransformCache;
-  private readonly loadNativeAddon: (modulePath: string) => unknown;
+  private readonly loadNativeAddon: (
+    from: string,
+    modulePath: string,
+  ) => unknown;
   private readonly loadCoreReexport: (
-    fromPath: string,
+    from: string,
     coreName: string,
   ) => unknown;
 
@@ -43,12 +46,17 @@ export class CjsExportsCache {
     this.loadCoreReexport = options.loadCoreReexport;
   }
 
-  getExportsOf(modulePath: string): Set<string> {
+  // `from` is the module asking for the exports — propagated to the load
+  // callbacks so user mocks (`jest.mock('./addon.node', factory)`) dispatch
+  // against the real importer rather than an empty placeholder. The cache is
+  // keyed by `modulePath` only (export keys don't depend on the importer);
+  // `from` matters only for the cache-miss load.
+  getExportsOf(from: string, modulePath: string): Set<string> {
     const cached = this.cache.get(modulePath);
     if (cached) return cached;
 
     if (path.extname(modulePath) === '.node') {
-      const nativeModule = this.loadNativeAddon(modulePath);
+      const nativeModule = this.loadNativeAddon(from, modulePath);
       const namedExports = new Set(
         Object.keys(nativeModule as Record<string, unknown>),
       );
@@ -72,7 +80,8 @@ export class CjsExportsCache {
         }
       } else {
         const resolved = this.resolution.resolveCjs(modulePath, reexport);
-        for (const key of this.getExportsOf(resolved)) namedExports.add(key);
+        for (const key of this.getExportsOf(modulePath, resolved))
+          namedExports.add(key);
       }
     }
 
