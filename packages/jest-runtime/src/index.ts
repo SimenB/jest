@@ -539,20 +539,7 @@ export default class Runtime {
 
     if (this._environment) {
       if (this._environment.global) {
-        const envGlobal = this._environment.global;
-        for (const key of Object.keys(envGlobal) as Array<
-          keyof typeof globalThis
-        >) {
-          const globalMock = envGlobal[key];
-          if (
-            ((typeof globalMock === 'object' && globalMock !== null) ||
-              typeof globalMock === 'function') &&
-            '_isMockFunction' in globalMock &&
-            globalMock._isMockFunction === true
-          ) {
-            globalMock.mockClear();
-          }
-        }
+        this._moduleMocker.clearMocksOnScope(this._environment.global);
       }
 
       if (this._environment.fakeTimers) {

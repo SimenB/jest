@@ -1395,6 +1395,26 @@ export class ModuleMocker {
     this._mockState = new WeakMap();
   }
 
+  /**
+   * Walks the own keys of `scope` and calls `.mockClear()` on each value that
+   * is a Jest mock function. Used by `resetModules` to clear mocks that user
+   * code installed directly on the test environment's global object (where
+   * the mock-fn registry doesn't see them).
+   */
+  clearMocksOnScope(scope: object): void {
+    for (const key of Object.keys(scope)) {
+      const value = (scope as Record<string, unknown>)[key];
+      if (
+        ((typeof value === 'object' && value !== null) ||
+          typeof value === 'function') &&
+        '_isMockFunction' in value &&
+        (value as {_isMockFunction: unknown})._isMockFunction === true
+      ) {
+        (value as unknown as Mock).mockClear();
+      }
+    }
+  }
+
   resetAllMocks(): void {
     this._mockConfigRegistry = new WeakMap();
     this._mockState = new WeakMap();
