@@ -16,7 +16,7 @@ exports[`prints useful error for imports after test is done w/ \`waitForUnhandle
       12 |   }, 0);
       13 | });
 
-      at dynamicImport (../../packages/jest-runtime/build/index.js:<<REPLACED>>)
+      at TestState.throwIfBetweenTests (../../packages/jest-runtime/build/index.js:<<REPLACED>>)
       at Timeout._onTimeout (__tests__/lateImport.test.mjs:10:22)"
 `;
 
@@ -37,10 +37,11 @@ ReferenceError: You are trying to \`import\` a file after the Jest environment h
 
       at Timeout._onTimeout (__tests__/lateImport.test.mjs:10:22)
 <<REPO_ROOT>>/packages/jest-runtime/build/index.js:<<REPLACED>>
-      throw new ReferenceError('You are trying to \`import\` a file after the Jest environment has been torn down.');
+      throw new ReferenceError(message);
             ^
 
 ReferenceError: You are trying to \`import\` a file after the Jest environment has been torn down.
+    at TestState.throwIfTornDown (<<REPO_ROOT>>/packages/jest-runtime/build/index.js:<<REPLACED>>)
     at dynamicImport (<<REPO_ROOT>>/packages/jest-runtime/build/index.js:<<REPLACED>>)
     at Timeout._onTimeout (<<REPO_ROOT>>/e2e/import-after-teardown/__tests__/lateImport.test.mjs:10:22)
 
