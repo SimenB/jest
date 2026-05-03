@@ -22,7 +22,7 @@ const waitBeforeRetrySymbol = Symbol.for('WAIT_BEFORE_RETRY');
 const retryImmediatelySymbol = Symbol.for('RETRY_IMMEDIATELY');
 const logErrorsBeforeRetrySymbol = Symbol.for('LOG_ERRORS_BEFORE_RETRY');
 
-export interface JestGlobalsDeps {
+export interface JestGlobalsOptions {
   config: Config.ProjectConfig;
   globalConfig: Config.GlobalConfig;
   environment: JestEnvironment;
@@ -59,11 +59,11 @@ export class JestGlobals {
   private readonly environment: JestEnvironment;
   private readonly mockState: MockState;
   private readonly moduleMocker: ModuleMocker;
-  private readonly setMockBridge: JestGlobalsDeps['setMock'];
-  private readonly setModuleMockBridge: JestGlobalsDeps['setModuleMock'];
-  private readonly generateMock: JestGlobalsDeps['generateMock'];
-  private readonly requireActualBridge: JestGlobalsDeps['requireActual'];
-  private readonly requireMockBridge: JestGlobalsDeps['requireMock'];
+  private readonly setMockBridge: JestGlobalsOptions['setMock'];
+  private readonly setModuleMockBridge: JestGlobalsOptions['setModuleMock'];
+  private readonly generateMock: JestGlobalsOptions['generateMock'];
+  private readonly requireActualBridge: JestGlobalsOptions['requireActual'];
+  private readonly requireMockBridge: JestGlobalsOptions['requireMock'];
   private readonly resetModulesBridge: () => void;
   private readonly isolateModulesBridge: (fn: () => void) => void;
   private readonly isolateModulesAsyncBridge: (
@@ -79,25 +79,25 @@ export class JestGlobals {
   private fakeTimersImpl: LegacyFakeTimers<unknown> | ModernFakeTimers | null;
   private envGlobalsOverride?: EnvironmentGlobals;
 
-  constructor(deps: JestGlobalsDeps) {
-    this.config = deps.config;
-    this.globalConfig = deps.globalConfig;
-    this.environment = deps.environment;
-    this.mockState = deps.mockState;
-    this.moduleMocker = deps.moduleMocker;
-    this.setMockBridge = deps.setMock;
-    this.setModuleMockBridge = deps.setModuleMock;
-    this.generateMock = deps.generateMock;
-    this.requireActualBridge = deps.requireActual;
-    this.requireMockBridge = deps.requireMock;
-    this.resetModulesBridge = deps.resetModules;
-    this.isolateModulesBridge = deps.isolateModules;
-    this.isolateModulesAsyncBridge = deps.isolateModulesAsync;
-    this.clearAllMocksBridge = deps.clearAllMocks;
-    this.resetAllMocksBridge = deps.resetAllMocks;
-    this.restoreAllMocksBridge = deps.restoreAllMocks;
-    this.testState = deps.testState;
-    this.logFormattedReferenceError = deps.logFormattedReferenceError;
+  constructor(options: JestGlobalsOptions) {
+    this.config = options.config;
+    this.globalConfig = options.globalConfig;
+    this.environment = options.environment;
+    this.mockState = options.mockState;
+    this.moduleMocker = options.moduleMocker;
+    this.setMockBridge = options.setMock;
+    this.setModuleMockBridge = options.setModuleMock;
+    this.generateMock = options.generateMock;
+    this.requireActualBridge = options.requireActual;
+    this.requireMockBridge = options.requireMock;
+    this.resetModulesBridge = options.resetModules;
+    this.isolateModulesBridge = options.isolateModules;
+    this.isolateModulesAsyncBridge = options.isolateModulesAsync;
+    this.clearAllMocksBridge = options.clearAllMocks;
+    this.resetAllMocksBridge = options.resetAllMocks;
+    this.restoreAllMocksBridge = options.restoreAllMocks;
+    this.testState = options.testState;
+    this.logFormattedReferenceError = options.logFormattedReferenceError;
     this.fakeTimersImpl = this.config.fakeTimers.legacyFakeTimers
       ? this.environment.fakeTimers
       : this.environment.fakeTimersModern;

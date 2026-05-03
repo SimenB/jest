@@ -14,7 +14,7 @@ import {
 import type {JestEnvironment} from '@jest/environment';
 import type {LegacyFakeTimers, ModernFakeTimers} from '@jest/fake-timers';
 import type {ModuleMocker} from 'jest-mock';
-import {JestGlobals, type JestGlobalsDeps} from '../JestGlobals';
+import {JestGlobals, type JestGlobalsOptions} from '../JestGlobals';
 import type {MockState} from '../MockState';
 import {evaluateSyntheticModule} from '../syntheticBuilders';
 import {TestState} from '../TestState';
@@ -24,11 +24,11 @@ type Stubs = {
   mockState: jest.Mocked<MockState>;
   moduleMocker: jest.Mocked<ModuleMocker>;
   environment: JestEnvironment;
-  setMock: jest.MockedFunction<JestGlobalsDeps['setMock']>;
-  setModuleMock: jest.MockedFunction<JestGlobalsDeps['setModuleMock']>;
-  generateMock: jest.MockedFunction<JestGlobalsDeps['generateMock']>;
-  requireActual: jest.MockedFunction<JestGlobalsDeps['requireActual']>;
-  requireMock: jest.MockedFunction<JestGlobalsDeps['requireMock']>;
+  setMock: jest.MockedFunction<JestGlobalsOptions['setMock']>;
+  setModuleMock: jest.MockedFunction<JestGlobalsOptions['setModuleMock']>;
+  generateMock: jest.MockedFunction<JestGlobalsOptions['generateMock']>;
+  requireActual: jest.MockedFunction<JestGlobalsOptions['requireActual']>;
+  requireMock: jest.MockedFunction<JestGlobalsOptions['requireMock']>;
   resetModules: jest.MockedFunction<() => void>;
   isolateModules: jest.MockedFunction<(fn: () => void) => void>;
   isolateModulesAsync: jest.MockedFunction<

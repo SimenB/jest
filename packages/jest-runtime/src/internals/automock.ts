@@ -10,7 +10,7 @@ import type {MockState} from './MockState';
 import type {ModuleRegistries} from './ModuleRegistries';
 import type {Resolution} from './Resolution';
 
-export interface GenerateMockDeps {
+export interface GenerateMockOptions {
   resolution: Resolution;
   mockState: MockState;
   moduleMocker: ModuleMocker;
@@ -24,9 +24,10 @@ export interface GenerateMockDeps {
 export function generateMock<T>(
   from: string,
   moduleName: string,
-  deps: GenerateMockDeps,
+  options: GenerateMockOptions,
 ): T {
-  const {resolution, mockState, moduleMocker, registries, requireModule} = deps;
+  const {resolution, mockState, moduleMocker, registries, requireModule} =
+    options;
 
   const modulePath =
     resolution.resolveCjsStub(from, moduleName) ||

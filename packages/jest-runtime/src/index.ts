@@ -155,13 +155,14 @@ export default class Runtime {
       config.extensionsToTreatAsEsm,
     );
     this.mockState = new MockState(this._resolution, config);
-    this.cjsExportsCache = new CjsExportsCache(
-      this._resolution,
-      this.fileCache,
-      modulePath => this.transformCache.getCachedSource(modulePath),
-      (from, moduleName) => this.requireModule(from, moduleName),
-      (from, moduleName) => this.requireModuleOrMock(from, moduleName),
-    );
+    this.cjsExportsCache = new CjsExportsCache({
+      fileCache: this.fileCache,
+      loadCoreReexport: (fromPath, coreName) =>
+        this.requireModule(fromPath, coreName),
+      loadNativeAddon: modulePath => this.requireModuleOrMock('', modulePath),
+      resolution: this._resolution,
+      transformCache: this.transformCache,
+    });
     // Construction is a DAG: testMainModule → requireBuilder → {coreModule,
     // executor} → cjsLoader. The two lambdas inside `requireBuilder`'s deps
     // close over `cjsLoader` (built last) and `this.requireModuleOrMock`,

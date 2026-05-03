@@ -138,7 +138,7 @@ function stripFileScheme(specifier: string): string {
   return specifier.startsWith('file://') ? fileURLToPath(specifier) : specifier;
 }
 
-export interface EsmLoaderDeps {
+export interface EsmLoaderOptions {
   resolution: Resolution;
   fileCache: FileCache;
   transformCache: TransformCache;
@@ -175,19 +175,19 @@ export class EsmLoader {
   private readonly linkingMap = new WeakMap<JestModule, Promise<unknown>>();
   private readonly evaluatingMap = new WeakMap<JestModule, Promise<void>>();
 
-  constructor(deps: EsmLoaderDeps) {
-    this.resolution = deps.resolution;
-    this.fileCache = deps.fileCache;
-    this.transformCache = deps.transformCache;
-    this.registries = deps.registries;
-    this.mockState = deps.mockState;
-    this.environment = deps.environment;
-    this.cjsExportsCache = deps.cjsExportsCache;
-    this.coreModule = deps.coreModule;
-    this.jestGlobals = deps.jestGlobals;
-    this.shouldLoadAsEsm = deps.shouldLoadAsEsm;
-    this.requireModuleOrMock = deps.requireModuleOrMock;
-    this.testState = deps.testState;
+  constructor(options: EsmLoaderOptions) {
+    this.resolution = options.resolution;
+    this.fileCache = options.fileCache;
+    this.transformCache = options.transformCache;
+    this.registries = options.registries;
+    this.mockState = options.mockState;
+    this.environment = options.environment;
+    this.cjsExportsCache = options.cjsExportsCache;
+    this.coreModule = options.coreModule;
+    this.jestGlobals = options.jestGlobals;
+    this.shouldLoadAsEsm = options.shouldLoadAsEsm;
+    this.requireModuleOrMock = options.requireModuleOrMock;
+    this.testState = options.testState;
   }
 
   // A `null` here means the legacy async path is mid-flight on this same

@@ -8,6 +8,14 @@
 import {CjsExportsCache} from '../CjsExportsCache';
 import type {FileCache} from '../FileCache';
 import type {Resolution} from '../Resolution';
+import type {TransformCache} from '../TransformCache';
+
+const makeTransformCache = (
+  cached: string | undefined = undefined,
+): TransformCache =>
+  ({
+    getCachedSource: jest.fn(() => cached),
+  }) as unknown as TransformCache;
 
 function makeResolution(overrides: Partial<Resolution> = {}) {
   const resolveCjs: jest.MockedFunction<Resolution['resolveCjs']> = jest.fn(
@@ -41,13 +49,13 @@ describe('CjsExportsCache', () => {
     const {fileCache, readFile} = makeFileCache({
       '/m.js': 'module.exports.foo = 1; module.exports.bar = 2;',
     });
-    const cache = new CjsExportsCache(
-      resolution,
+    const cache = new CjsExportsCache({
       fileCache,
-      () => undefined,
-      jest.fn(),
-      jest.fn(),
-    );
+      loadCoreReexport: jest.fn(),
+      loadNativeAddon: jest.fn(),
+      resolution,
+      transformCache: makeTransformCache(),
+    });
 
     expect([...cache.getExportsOf('/m.js')]).toEqual(['foo', 'bar']);
     expect([...cache.getExportsOf('/m.js')]).toEqual(['foo', 'bar']);
@@ -57,13 +65,13 @@ describe('CjsExportsCache', () => {
   test('prefers transformed code over reading the file fresh', () => {
     const {resolution} = makeResolution();
     const {fileCache, readFile} = makeFileCache();
-    const cache = new CjsExportsCache(
-      resolution,
+    const cache = new CjsExportsCache({
       fileCache,
-      () => 'module.exports.transformed = 1;',
-      jest.fn(),
-      jest.fn(),
-    );
+      loadCoreReexport: jest.fn(),
+      loadNativeAddon: jest.fn(),
+      resolution,
+      transformCache: makeTransformCache('module.exports.transformed = 1;'),
+    });
 
     expect([...cache.getExportsOf('/m.js')]).toEqual(['transformed']);
     expect(readFile).not.toHaveBeenCalled();
@@ -75,55 +83,55 @@ describe('CjsExportsCache', () => {
       '/a.js': "module.exports.a = 1; module.exports = require('./b');",
       '/resolved/./b': 'module.exports.b = 1;',
     });
-    const cache = new CjsExportsCache(
-      resolution,
+    const cache = new CjsExportsCache({
       fileCache,
-      () => undefined,
-      jest.fn(),
-      jest.fn(),
-    );
+      loadCoreReexport: jest.fn(),
+      loadNativeAddon: jest.fn(),
+      resolution,
+      transformCache: makeTransformCache(),
+    });
 
     expect([...cache.getExportsOf('/a.js')].sort()).toEqual(['a', 'b']);
   });
 
-  test('loads core-module re-exports via the requireModule callback', () => {
+  test('loads core-module re-exports via the loadCoreReexport callback', () => {
     const {resolution, isCoreModule} = makeResolution();
     isCoreModule.mockImplementation((name: string) => name === 'fs');
     const {fileCache} = makeFileCache({
       '/m.js': "module.exports = require('fs');",
     });
-    const requireModule = jest
+    const loadCoreReexport = jest
       .fn()
       .mockReturnValue({readFileSync: () => {}, writeFileSync: () => {}});
-    const cache = new CjsExportsCache(
-      resolution,
+    const cache = new CjsExportsCache({
       fileCache,
-      () => undefined,
-      requireModule,
-      jest.fn(),
-    );
+      loadCoreReexport,
+      loadNativeAddon: jest.fn(),
+      resolution,
+      transformCache: makeTransformCache(),
+    });
 
     expect([...cache.getExportsOf('/m.js')].sort()).toEqual([
       'readFileSync',
       'writeFileSync',
     ]);
-    expect(requireModule).toHaveBeenCalledWith('/m.js', 'fs');
+    expect(loadCoreReexport).toHaveBeenCalledWith('/m.js', 'fs');
   });
 
-  test('reads native (.node) addon exports via requireModuleOrMock', () => {
+  test('reads native (.node) addon exports via loadNativeAddon', () => {
     const {resolution} = makeResolution();
     const {fileCache, readFile} = makeFileCache();
-    const requireModuleOrMock = jest.fn().mockReturnValue({nativeFn: () => {}});
-    const cache = new CjsExportsCache(
-      resolution,
+    const loadNativeAddon = jest.fn().mockReturnValue({nativeFn: () => {}});
+    const cache = new CjsExportsCache({
       fileCache,
-      () => undefined,
-      jest.fn(),
-      requireModuleOrMock,
-    );
+      loadCoreReexport: jest.fn(),
+      loadNativeAddon,
+      resolution,
+      transformCache: makeTransformCache(),
+    });
 
     expect([...cache.getExportsOf('/addon.node')]).toEqual(['nativeFn']);
-    expect(requireModuleOrMock).toHaveBeenCalledWith('', '/addon.node');
+    expect(loadNativeAddon).toHaveBeenCalledWith('/addon.node');
     expect(readFile).not.toHaveBeenCalled();
   });
 
@@ -132,13 +140,13 @@ describe('CjsExportsCache', () => {
     const {fileCache, readFile} = makeFileCache({
       '/m.js': 'module.exports.foo = 1;',
     });
-    const cache = new CjsExportsCache(
-      resolution,
+    const cache = new CjsExportsCache({
       fileCache,
-      () => undefined,
-      jest.fn(),
-      jest.fn(),
-    );
+      loadCoreReexport: jest.fn(),
+      loadNativeAddon: jest.fn(),
+      resolution,
+      transformCache: makeTransformCache(),
+    });
 
     cache.getExportsOf('/m.js');
     cache.clear();

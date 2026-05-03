@@ -22,7 +22,7 @@ import {
   supportsSyncEvaluate,
 } from './nodeCapabilities';
 
-export interface CjsLoaderDeps {
+export interface CjsLoaderOptions {
   resolution: Resolution;
   registries: ModuleRegistries;
   mockState: MockState;
@@ -47,17 +47,17 @@ export class CjsLoader {
   private readonly testState: TestState;
   private readonly logFormattedReferenceError: (msg: string) => void;
 
-  constructor(deps: CjsLoaderDeps) {
-    this.resolution = deps.resolution;
-    this.registries = deps.registries;
-    this.mockState = deps.mockState;
-    this.transformCache = deps.transformCache;
-    this.environment = deps.environment;
-    this.coreModule = deps.coreModule;
-    this.executor = deps.executor;
-    this.requireEsm = deps.requireEsm;
-    this.testState = deps.testState;
-    this.logFormattedReferenceError = deps.logFormattedReferenceError;
+  constructor(options: CjsLoaderOptions) {
+    this.resolution = options.resolution;
+    this.registries = options.registries;
+    this.mockState = options.mockState;
+    this.transformCache = options.transformCache;
+    this.environment = options.environment;
+    this.coreModule = options.coreModule;
+    this.executor = options.executor;
+    this.requireEsm = options.requireEsm;
+    this.testState = options.testState;
+    this.logFormattedReferenceError = options.logFormattedReferenceError;
   }
 
   requireModule<T = unknown>(

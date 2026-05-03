@@ -12,7 +12,7 @@ import type {JestGlobals} from '../JestGlobals';
 import {
   CJS_PARSE_ERROR,
   ModuleExecutor,
-  type ModuleExecutorDeps,
+  type ModuleExecutorOptions,
   isCjsParseError,
 } from '../ModuleExecutor';
 import type {Resolution} from '../Resolution';
@@ -43,7 +43,7 @@ describe('ModuleExecutor', () => {
         injectGlobals: true,
         sandboxInjectedGlobals: [],
       }),
-      dynamicImport: jest.fn<ModuleExecutorDeps['dynamicImport']>(),
+      dynamicImport: jest.fn<ModuleExecutorOptions['dynamicImport']>(),
       environment: {global: {}} as JestEnvironment,
       jestGlobals: {
         jestObjectFor: () => ({}) as Jest,

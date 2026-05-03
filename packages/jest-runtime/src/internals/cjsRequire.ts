@@ -26,7 +26,7 @@ export type ResolveOptions = Parameters<typeof require.resolve>[1] & {
   [JEST_RESOLVE_OUTSIDE_VM_OPTION]?: true;
 };
 
-export interface RequireBuilderDeps {
+export interface RequireBuilderOptions {
   resolution: Resolution;
   registries: ModuleRegistries;
   testMainModule: TestMainModule;
@@ -47,12 +47,12 @@ export class RequireBuilder {
     moduleName: string,
   ) => unknown;
 
-  constructor(deps: RequireBuilderDeps) {
-    this.resolution = deps.resolution;
-    this.registries = deps.registries;
-    this.testMainModule = deps.testMainModule;
-    this.requireDispatch = deps.requireDispatch;
-    this.requireInternal = deps.requireInternal;
+  constructor(options: RequireBuilderOptions) {
+    this.resolution = options.resolution;
+    this.registries = options.registries;
+    this.testMainModule = options.testMainModule;
+    this.requireDispatch = options.requireDispatch;
+    this.requireInternal = options.requireInternal;
   }
 
   for(
@@ -189,7 +189,7 @@ export class RequireBuilder {
   }
 }
 
-export interface CoreModuleProviderDeps {
+export interface CoreModuleProviderOptions {
   resolution: Resolution;
   environment: JestEnvironment;
   requireBuilder: RequireBuilder;
@@ -201,10 +201,10 @@ export class CoreModuleProvider {
   private readonly environment: JestEnvironment;
   private readonly requireBuilder: RequireBuilder;
 
-  constructor(deps: CoreModuleProviderDeps) {
-    this.resolution = deps.resolution;
-    this.environment = deps.environment;
-    this.requireBuilder = deps.requireBuilder;
+  constructor(options: CoreModuleProviderOptions) {
+    this.resolution = options.resolution;
+    this.environment = options.environment;
+    this.requireBuilder = options.requireBuilder;
   }
 
   require(moduleName: string, supportPrefix: boolean): unknown {

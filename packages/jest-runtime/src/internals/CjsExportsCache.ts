@@ -9,6 +9,15 @@ import * as path from 'node:path';
 import {parse as parseCjs} from 'cjs-module-lexer';
 import type {FileCache} from './FileCache';
 import type {Resolution} from './Resolution';
+import type {TransformCache} from './TransformCache';
+
+interface CjsExportsCacheOptions {
+  resolution: Resolution;
+  fileCache: FileCache;
+  transformCache: TransformCache;
+  loadNativeAddon: (modulePath: string) => unknown;
+  loadCoreReexport: (fromPath: string, coreName: string) => unknown;
+}
 
 // Computes (and caches) the named exports of a CJS module by static analysis
 // with cjs-module-lexer, recursively walking `module.exports = require(...)`
@@ -19,27 +28,19 @@ export class CjsExportsCache {
   private readonly cache = new Map<string, Set<string>>();
   private readonly resolution: Resolution;
   private readonly fileCache: FileCache;
-  private readonly getTransformedCode: (
-    modulePath: string,
-  ) => string | undefined;
-  private readonly requireModule: (from: string, moduleName: string) => unknown;
-  private readonly requireModuleOrMock: (
-    from: string,
-    moduleName: string,
+  private readonly transformCache: TransformCache;
+  private readonly loadNativeAddon: (modulePath: string) => unknown;
+  private readonly loadCoreReexport: (
+    fromPath: string,
+    coreName: string,
   ) => unknown;
 
-  constructor(
-    resolution: Resolution,
-    fileCache: FileCache,
-    getTransformedCode: (modulePath: string) => string | undefined,
-    requireModule: (from: string, moduleName: string) => unknown,
-    requireModuleOrMock: (from: string, moduleName: string) => unknown,
-  ) {
-    this.resolution = resolution;
-    this.fileCache = fileCache;
-    this.getTransformedCode = getTransformedCode;
-    this.requireModule = requireModule;
-    this.requireModuleOrMock = requireModuleOrMock;
+  constructor(options: CjsExportsCacheOptions) {
+    this.resolution = options.resolution;
+    this.fileCache = options.fileCache;
+    this.transformCache = options.transformCache;
+    this.loadNativeAddon = options.loadNativeAddon;
+    this.loadCoreReexport = options.loadCoreReexport;
   }
 
   getExportsOf(modulePath: string): Set<string> {
@@ -47,7 +48,7 @@ export class CjsExportsCache {
     if (cached) return cached;
 
     if (path.extname(modulePath) === '.node') {
-      const nativeModule = this.requireModuleOrMock('', modulePath);
+      const nativeModule = this.loadNativeAddon(modulePath);
       const namedExports = new Set(
         Object.keys(nativeModule as Record<string, unknown>),
       );
@@ -56,7 +57,7 @@ export class CjsExportsCache {
     }
 
     const transformedCode =
-      this.getTransformedCode(modulePath) ??
+      this.transformCache.getCachedSource(modulePath) ??
       this.fileCache.readFile(modulePath);
 
     const {exports, reexports} = parseCjs(transformedCode);
@@ -64,7 +65,7 @@ export class CjsExportsCache {
 
     for (const reexport of reexports) {
       if (this.resolution.isCoreModule(reexport)) {
-        const coreExports = this.requireModule(modulePath, reexport);
+        const coreExports = this.loadCoreReexport(modulePath, reexport);
         if (coreExports !== null && typeof coreExports === 'object') {
           for (const key of Object.keys(coreExports as Record<string, unknown>))
             namedExports.add(key);

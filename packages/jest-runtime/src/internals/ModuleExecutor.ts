@@ -38,7 +38,7 @@ export const isCjsParseError = (error: unknown): error is Error =>
   isError(error) &&
   (error as unknown as Record<symbol, unknown>)[CJS_PARSE_ERROR] === true;
 
-export interface ModuleExecutorDeps {
+export interface ModuleExecutorOptions {
   resolution: Resolution;
   transformCache: TransformCache;
   environment: JestEnvironment;
@@ -63,19 +63,19 @@ export class ModuleExecutor {
   private readonly requireBuilder: RequireBuilder;
   private readonly testMainModule: TestMainModule;
   private readonly jestGlobals: JestGlobals;
-  private readonly dynamicImport: ModuleExecutorDeps['dynamicImport'];
+  private readonly dynamicImport: ModuleExecutorOptions['dynamicImport'];
   private currentlyExecutingManualMock: string | null = null;
 
-  constructor(deps: ModuleExecutorDeps) {
-    this.resolution = deps.resolution;
-    this.transformCache = deps.transformCache;
-    this.environment = deps.environment;
-    this.config = deps.config;
-    this.testPath = deps.testPath;
-    this.requireBuilder = deps.requireBuilder;
-    this.testMainModule = deps.testMainModule;
-    this.jestGlobals = deps.jestGlobals;
-    this.dynamicImport = deps.dynamicImport;
+  constructor(options: ModuleExecutorOptions) {
+    this.resolution = options.resolution;
+    this.transformCache = options.transformCache;
+    this.environment = options.environment;
+    this.config = options.config;
+    this.testPath = options.testPath;
+    this.requireBuilder = options.requireBuilder;
+    this.testMainModule = options.testMainModule;
+    this.jestGlobals = options.jestGlobals;
+    this.dynamicImport = options.dynamicImport;
   }
 
   getCurrentlyExecutingManualMock(): string | null {
