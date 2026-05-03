@@ -40,6 +40,7 @@ import {ModuleExecutor} from './internals/ModuleExecutor';
 import {ModuleRegistries} from './internals/ModuleRegistries';
 import {Resolution} from './internals/Resolution';
 import {TestMainModule} from './internals/TestMainModule';
+import {TestState} from './internals/TestState';
 import {
   TransformCache,
   type TransformOptions,
@@ -111,8 +112,7 @@ export default class Runtime {
   private readonly v8Coverage: V8CoverageCollector;
   private readonly coreModule: CoreModuleProvider;
   private readonly jestGlobals: JestGlobals;
-  private testState: 'loading' | 'inTest' | 'betweenTests' | 'tornDown' =
-    'loading';
+  private readonly testState: TestState;
   private readonly loggedReferenceErrors = new Set<string>();
 
   constructor(
@@ -136,6 +136,9 @@ export default class Runtime {
     );
     this._moduleMocker = this._environment.moduleMocker;
     this._testPath = testPath;
+    this.testState = new TestState(msg =>
+      this._logFormattedReferenceError(msg),
+    );
     this.transformCache = new TransformCache(
       transformer,
       this.fileCache,
@@ -184,7 +187,6 @@ export default class Runtime {
       config,
       environment: this._environment,
       generateMock: (from, moduleName) => this._generateMock(from, moduleName),
-      getTestState: () => this.testState,
       globalConfig,
       isolateModules: fn => this.isolateModules(fn),
       isolateModulesAsync: fn => this.isolateModulesAsync(fn),
@@ -200,21 +202,21 @@ export default class Runtime {
         this.setMock(from, moduleName, mockFactory, options),
       setModuleMock: (from, moduleName, mockFactory, options) =>
         this.setModuleMock(from, moduleName, mockFactory, options),
+      testState: this.testState,
     });
     this.esmLoader = new EsmLoader({
       cjsExportsCache: this.cjsExportsCache,
       coreModule: this.coreModule,
       environment: this._environment,
       fileCache: this.fileCache,
-      getTestState: () => this.testState,
       jestGlobals: this.jestGlobals,
-      logFormattedReferenceError: msg => this._logFormattedReferenceError(msg),
       mockState: this.mockState,
       registries: this.registries,
       requireModuleOrMock: (from, moduleName) =>
         this.requireModuleOrMock(from, moduleName),
       resolution: this._resolution,
       shouldLoadAsEsm: modulePath => this.unstable_shouldLoadAsEsm(modulePath),
+      testState: this.testState,
       transformCache: this.transformCache,
     });
     this.executor = new ModuleExecutor({
@@ -233,13 +235,13 @@ export default class Runtime {
       coreModule: this.coreModule,
       environment: this._environment,
       executor: this.executor,
-      getTestState: () => this.testState,
       logFormattedReferenceError: msg => this._logFormattedReferenceError(msg),
       mockState: this.mockState,
       registries: this.registries,
       requireEsm: <T>(modulePath: string) =>
         this.esmLoader.requireEsmModule<T>(modulePath),
       resolution: this._resolution,
+      testState: this.testState,
       transformCache: this.transformCache,
     });
 
@@ -450,11 +452,11 @@ export default class Runtime {
   }
 
   requireModuleOrMock<T = unknown>(from: string, moduleName: string): T {
-    if (this.testState === 'tornDown') {
-      this._logFormattedReferenceError(
+    if (
+      this.testState.bailIfTornDown(
         'You are trying to `require` a file after the Jest environment has been torn down.',
-      );
-      process.exitCode = 1;
+      )
+    ) {
       // @ts-expect-error: exiting early
       return;
     }
@@ -597,11 +599,11 @@ export default class Runtime {
   }
 
   enterTestCode(): void {
-    this.testState = 'inTest';
+    this.testState.enterTestCode();
   }
 
   leaveTestCode(): void {
-    this.testState = 'betweenTests';
+    this.testState.leaveTestCode();
   }
 
   teardown(): void {
@@ -619,7 +621,7 @@ export default class Runtime {
     this.v8Coverage.reset();
     this.coreModule.reset();
 
-    this.testState = 'tornDown';
+    this.testState.teardown();
   }
 
   private _generateMock<T>(from: string, moduleName: string): T {

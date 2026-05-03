@@ -12,6 +12,7 @@ import type {expect} from '@jest/globals';
 import type {Config} from '@jest/types';
 import type {ModuleMocker} from 'jest-mock';
 import type {MockState} from './MockState';
+import type {TestState} from './TestState';
 import {syntheticFromExports} from './syntheticBuilders';
 import type {EnvironmentGlobals, JestGlobalsWithJest} from './types';
 
@@ -20,8 +21,6 @@ const retryTimesSymbol = Symbol.for('RETRY_TIMES');
 const waitBeforeRetrySymbol = Symbol.for('WAIT_BEFORE_RETRY');
 const retryImmediatelySymbol = Symbol.for('RETRY_IMMEDIATELY');
 const logErrorsBeforeRetrySymbol = Symbol.for('LOG_ERRORS_BEFORE_RETRY');
-
-export type TestState = 'loading' | 'inTest' | 'betweenTests' | 'tornDown';
 
 export interface JestGlobalsDeps {
   config: Config.ProjectConfig;
@@ -50,7 +49,7 @@ export interface JestGlobalsDeps {
   clearAllMocks: () => void;
   resetAllMocks: () => void;
   restoreAllMocks: () => void;
-  getTestState: () => TestState;
+  testState: TestState;
   logFormattedReferenceError: (msg: string) => void;
 }
 
@@ -73,7 +72,7 @@ export class JestGlobals {
   private readonly clearAllMocksBridge: () => void;
   private readonly resetAllMocksBridge: () => void;
   private readonly restoreAllMocksBridge: () => void;
-  private readonly getTestState: () => TestState;
+  private readonly testState: TestState;
   private readonly logFormattedReferenceError: (msg: string) => void;
 
   private readonly cache = new Map<string, Jest>();
@@ -97,7 +96,7 @@ export class JestGlobals {
     this.clearAllMocksBridge = deps.clearAllMocks;
     this.resetAllMocksBridge = deps.resetAllMocks;
     this.restoreAllMocksBridge = deps.restoreAllMocks;
-    this.getTestState = deps.getTestState;
+    this.testState = deps.testState;
     this.logFormattedReferenceError = deps.logFormattedReferenceError;
     this.fakeTimersImpl = this.config.fakeTimers.legacyFakeTimers
       ? this.environment.fakeTimers
@@ -223,7 +222,7 @@ export class JestGlobals {
     };
     const _getFakeTimers = () => {
       if (
-        this.getTestState() === 'tornDown' ||
+        this.testState.isTornDown() ||
         !(this.environment.fakeTimers || this.environment.fakeTimersModern)
       ) {
         this.logFormattedReferenceError(
@@ -231,11 +230,9 @@ export class JestGlobals {
         );
         process.exitCode = 1;
       }
-      if (this.getTestState() === 'betweenTests') {
-        throw new ReferenceError(
-          'You are trying to access a property or method of the Jest environment outside of the scope of the test code.',
-        );
-      }
+      this.testState.throwIfBetweenTests(
+        'You are trying to access a property or method of the Jest environment outside of the scope of the test code.',
+      );
 
       return this.fakeTimersImpl!;
     };
@@ -349,7 +346,7 @@ export class JestGlobals {
       },
       getSeed: () => this.globalConfig.seed,
       getTimerCount: () => _getFakeTimers().getTimerCount(),
-      isEnvironmentTornDown: () => this.getTestState() === 'tornDown',
+      isEnvironmentTornDown: () => this.testState.isTornDown(),
       isMockFunction: this.moduleMocker.isMockFunction,
       isolateModules,
       isolateModulesAsync,

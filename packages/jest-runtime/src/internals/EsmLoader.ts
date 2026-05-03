@@ -23,6 +23,7 @@ import type {MockState} from './MockState';
 import {isCjsParseError} from './ModuleExecutor';
 import type {ModuleRegistries} from './ModuleRegistries';
 import {type Resolution, isWasm} from './Resolution';
+import type {TestState} from './TestState';
 import type {TransformCache, TransformOptions} from './TransformCache';
 import type {CoreModuleProvider} from './cjsRequire';
 import type {ESModule, JestModule, ModuleRegistry} from './moduleTypes';
@@ -137,8 +138,6 @@ function stripFileScheme(specifier: string): string {
   return specifier.startsWith('file://') ? fileURLToPath(specifier) : specifier;
 }
 
-export type TestState = 'loading' | 'inTest' | 'betweenTests' | 'tornDown';
-
 export interface EsmLoaderDeps {
   resolution: Resolution;
   fileCache: FileCache;
@@ -151,8 +150,7 @@ export interface EsmLoaderDeps {
   jestGlobals: JestGlobals;
   shouldLoadAsEsm: (modulePath: string) => boolean;
   requireModuleOrMock: (from: string, moduleName: string) => unknown;
-  getTestState: () => TestState;
-  logFormattedReferenceError: (msg: string) => void;
+  testState: TestState;
 }
 
 export class EsmLoader {
@@ -170,8 +168,7 @@ export class EsmLoader {
     from: string,
     moduleName: string,
   ) => unknown;
-  private readonly getTestState: () => TestState;
-  private readonly logFormattedReferenceError: (msg: string) => void;
+  private readonly testState: TestState;
   // Used only by the legacy async path; deletable when min-Node ≥ v24.9
   // (delete the block at the bottom of this file too — eslint/tsc will
   // surface anything else that becomes unused).
@@ -190,8 +187,7 @@ export class EsmLoader {
     this.jestGlobals = deps.jestGlobals;
     this.shouldLoadAsEsm = deps.shouldLoadAsEsm;
     this.requireModuleOrMock = deps.requireModuleOrMock;
-    this.getTestState = deps.getTestState;
-    this.logFormattedReferenceError = deps.logFormattedReferenceError;
+    this.testState = deps.testState;
   }
 
   // A `null` here means the legacy async path is mid-flight on this same
@@ -222,11 +218,11 @@ export class EsmLoader {
     rootQuery: string,
     mode: SyncEsmMode,
   ): ESModule | null {
-    if (this.getTestState() === 'tornDown') {
-      this.logFormattedReferenceError(
+    if (
+      this.testState.bailIfTornDown(
         'You are trying to `import` a file after the Jest environment has been torn down.',
-      );
-      process.exitCode = 1;
+      )
+    ) {
       return null;
     }
 
@@ -960,11 +956,11 @@ export class EsmLoader {
     referencingIdentifier: string,
     context: VMContext,
   ): Promise<T> {
-    if (this.getTestState() === 'tornDown') {
-      this.logFormattedReferenceError(
+    if (
+      this.testState.bailIfTornDown(
         'You are trying to `import` a file after the Jest environment has been torn down.',
-      );
-      process.exitCode = 1;
+      )
+    ) {
       // @ts-expect-error -- exiting
       return;
     }
@@ -1059,11 +1055,11 @@ export class EsmLoader {
   }
 
   private async linkAndEvaluateModule(module: VMModule): Promise<VMModule> {
-    if (this.getTestState() === 'tornDown') {
-      this.logFormattedReferenceError(
+    if (
+      this.testState.bailIfTornDown(
         'You are trying to `import` a file after the Jest environment has been torn down.',
-      );
-      process.exitCode = 1;
+      )
+    ) {
       // @ts-expect-error: exiting early
       return;
     }
@@ -1236,21 +1232,12 @@ export class EsmLoader {
       runtimeSupportsVmModules,
       'You need to run with a version of node that supports ES Modules in the VM API. See https://jestjs.io/docs/ecmascript-modules',
     );
-    const testState = this.getTestState();
-    if (testState === 'betweenTests') {
-      throw new ReferenceError(
-        'You are trying to `import` a file outside of the scope of the test code.',
-      );
-    }
-    if (testState === 'tornDown') {
-      this.logFormattedReferenceError(
-        'You are trying to `import` a file after the Jest environment has been torn down.',
-      );
-      process.exitCode = 1;
-      throw new ReferenceError(
-        'You are trying to `import` a file after the Jest environment has been torn down.',
-      );
-    }
+    this.testState.throwIfBetweenTests(
+      'You are trying to `import` a file outside of the scope of the test code.',
+    );
+    this.testState.throwIfTornDown(
+      'You are trying to `import` a file after the Jest environment has been torn down.',
+    );
     const dyn = await this.resolveModule<VMModule>(
       specifier,
       referencingModule.identifier,

@@ -7,12 +7,13 @@
 
 import {testWithSyncEsm} from '@jest/test-utils';
 import type {JestEnvironment} from '@jest/environment';
-import {CjsLoader, type TestState} from '../CjsLoader';
+import {CjsLoader} from '../CjsLoader';
 import type {CoreModuleProvider} from '../cjsRequire';
 import type {ModuleExecutor} from '../ModuleExecutor';
 import type {MockState} from '../MockState';
 import type {ModuleRegistries} from '../ModuleRegistries';
 import type {Resolution} from '../Resolution';
+import {TestState} from '../TestState';
 import type {TransformCache} from '../TransformCache';
 
 type Stubs = {
@@ -24,11 +25,12 @@ type Stubs = {
   coreModule: jest.Mocked<CoreModuleProvider>;
   executor: jest.Mocked<ModuleExecutor>;
   requireEsm: jest.MockedFunction<<T>(modulePath: string) => T>;
-  getTestState: jest.MockedFunction<() => TestState>;
+  testState: TestState;
   logFormattedReferenceError: jest.MockedFunction<(msg: string) => void>;
 };
 
 function makeLoader(overrides: Partial<Stubs> = {}) {
+  const logFormattedReferenceError = jest.fn();
   const stubs: Stubs = {
     coreModule: {
       require: jest.fn(),
@@ -42,8 +44,7 @@ function makeLoader(overrides: Partial<Stubs> = {}) {
       mainModule: null,
       resetMainModule: jest.fn(),
     } as unknown as jest.Mocked<ModuleExecutor>,
-    getTestState: jest.fn(() => 'inTest' as const),
-    logFormattedReferenceError: jest.fn(),
+    logFormattedReferenceError,
     mockState: {
       getCjsModuleId: jest.fn(() => 'id'),
       isExplicitlyUnmocked: jest.fn(() => false),
@@ -60,6 +61,7 @@ function makeLoader(overrides: Partial<Stubs> = {}) {
       resolveCjs: jest.fn(() => '/m.js'),
       shouldLoadAsEsm: jest.fn(() => false),
     } as unknown as jest.Mocked<Resolution>,
+    testState: new TestState(logFormattedReferenceError),
     transformCache: {
       transformJson: jest.fn((_path, _opts) => '{"answer":42}'),
     } as unknown as jest.Mocked<TransformCache>,
@@ -69,12 +71,12 @@ function makeLoader(overrides: Partial<Stubs> = {}) {
     coreModule: stubs.coreModule,
     environment: stubs.environment,
     executor: stubs.executor,
-    getTestState: stubs.getTestState,
     logFormattedReferenceError: stubs.logFormattedReferenceError,
     mockState: stubs.mockState,
     registries: stubs.registries,
     requireEsm: stubs.requireEsm,
     resolution: stubs.resolution,
+    testState: stubs.testState,
     transformCache: stubs.transformCache,
   });
   return {loader, stubs};
@@ -280,10 +282,9 @@ describe('CjsLoader.loadModule', () => {
     expect(localModule.loaded).toBe(false);
   });
 
-  test('logs and bails when testState is tornDown (JS branch only)', () => {
-    const {loader, stubs} = makeLoader({
-      getTestState: jest.fn<() => TestState>(() => 'tornDown'),
-    });
+  test('bails when testState reports torn down (JS branch only)', () => {
+    const {loader, stubs} = makeLoader();
+    stubs.testState.teardown();
     const localModule = {
       children: [],
       exports: {},
@@ -301,7 +302,9 @@ describe('CjsLoader.loadModule', () => {
       undefined,
       new Map(),
     );
-    expect(stubs.logFormattedReferenceError).toHaveBeenCalled();
+    expect(stubs.logFormattedReferenceError).toHaveBeenCalledWith(
+      expect.stringContaining('after the Jest environment has been torn down'),
+    );
     expect(stubs.executor.exec).not.toHaveBeenCalled();
   });
 });
