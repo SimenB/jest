@@ -81,7 +81,7 @@ describe('ModuleRegistries', () => {
 
       // Capture the live overlay maps so we can prove they are cleared, not
       // merely orphaned for GC.
-      const cjsOverlay = registries.getActiveCjsRegistry(false);
+      const cjsOverlay = registries.getActiveCjsRegistry();
       const esmOverlay = registries.getActiveEsmRegistry();
       const mockOverlay = registries.getActiveMockRegistry();
       expect(cjsOverlay.size).toBe(1);

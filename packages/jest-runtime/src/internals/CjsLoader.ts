@@ -117,7 +117,9 @@ export class CjsLoader {
       return this.requireEsm<T>(modulePath);
     }
 
-    const moduleRegistry = this.registries.getActiveCjsRegistry(isInternal);
+    const moduleRegistry = isInternal
+      ? this.registries.getInternalCjsRegistry()
+      : this.registries.getActiveCjsRegistry();
 
     const module = moduleRegistry.get(modulePath);
     if (module) {

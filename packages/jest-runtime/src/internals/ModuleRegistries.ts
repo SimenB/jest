@@ -124,9 +124,12 @@ export class ModuleRegistries {
     return this.isolation?.esm ?? this.esModuleRegistry;
   }
 
-  getActiveCjsRegistry(internal: boolean): ModuleRegistry {
-    if (internal) return this.internalModuleRegistry;
+  getActiveCjsRegistry(): ModuleRegistry {
     return this.isolation?.cjs ?? this.moduleRegistry;
+  }
+
+  getInternalCjsRegistry(): ModuleRegistry {
+    return this.internalModuleRegistry;
   }
 
   getActiveMockRegistry(): Map<string, unknown> {
