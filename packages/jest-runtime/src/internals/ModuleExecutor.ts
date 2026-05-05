@@ -25,7 +25,11 @@ import type {Resolution} from './Resolution';
 import type {TestMainModule} from './TestMainModule';
 import type {TransformCache, TransformOptions} from './TransformCache';
 import type {RequireBuilder} from './cjsRequire';
-import type {InitialModule, ModuleRegistry} from './moduleTypes';
+import type {
+  ImportAttributes,
+  InitialModule,
+  ModuleRegistry,
+} from './moduleTypes';
 import {runtimeSupportsVmModules} from './nodeCapabilities';
 
 export type ExecResult = 'loaded' | 'env-disposed';
@@ -51,6 +55,7 @@ export interface ModuleExecutorOptions {
     specifier: string,
     identifier: string,
     context: VMContext,
+    importAttributes?: ImportAttributes,
   ) => Promise<VMModule>;
 }
 
@@ -190,12 +195,21 @@ export class ModuleExecutor {
         this.constructInjectedModuleParameters(),
         {
           filename: scriptFilename,
-          importModuleDynamically: async specifier => {
+          importModuleDynamically: async (
+            specifier,
+            _function,
+            importAttributes,
+          ) => {
             invariant(
               runtimeSupportsVmModules,
               'You need to run with a version of node that supports ES Modules in the VM API. See https://jestjs.io/docs/ecmascript-modules',
             );
-            return this.dynamicImport(specifier, scriptFilename, vmContext);
+            return this.dynamicImport(
+              specifier,
+              scriptFilename,
+              vmContext,
+              importAttributes as ImportAttributes | undefined,
+            );
           },
           parsingContext: vmContext,
         },

@@ -26,7 +26,12 @@ import {type Resolution, isWasm} from './Resolution';
 import type {TestState} from './TestState';
 import type {TransformCache, TransformOptions} from './TransformCache';
 import type {CoreModuleProvider} from './cjsRequire';
-import type {ESModule, JestModule, ModuleRegistry} from './moduleTypes';
+import type {
+  ESModule,
+  ImportAttributes,
+  JestModule,
+  ModuleRegistry,
+} from './moduleTypes';
 import {
   runtimeSupportsVmModules,
   supportsSyncEvaluate,
@@ -45,7 +50,7 @@ interface VMModuleWithAsyncGraph extends VMModule {
   hasTopLevelAwait?: () => boolean;
   moduleRequests?: ReadonlyArray<{
     specifier: string;
-    attributes: Record<string, string>;
+    attributes: ImportAttributes;
     phase?: string;
   }>;
   linkRequests?: (deps: ReadonlyArray<VMModule>) => void;
@@ -61,6 +66,21 @@ export type SyncEsmMode = 'sync-preferred' | 'sync-required';
 type WorklistEntry = {
   cacheKey: string;
   modulePath: string;
+};
+
+type ResolvedSyncSpecifier = {
+  cacheKey: string;
+  enqueue: WorklistEntry | null;
+  modulePath: string;
+};
+
+// Shape of the third arg Node passes to the `module.link` callback. TC39 final
+// is `{attributes}`; legacy was `{assert}`. `@types/node@18` only types the
+// legacy field, so we declare both ourselves.
+// TODO(jest next major): drop `assert` once we require Node 22+.
+type ModuleLinkExtra = {
+  assert?: ImportAttributes;
+  attributes?: ImportAttributes;
 };
 
 // Source-text entries carry their dep cacheKeys (used for `linkRequests`).
@@ -124,6 +144,101 @@ function parseDataUri(specifier: string): {
     return {code: Buffer.from(code, 'base64').toString(), mime};
   }
   throw new Error(`Invalid data URI encoding: ${encoding}`);
+}
+
+// Mirrors Node's `validateAttributes` in lib/internal/modules/esm/assert.js.
+// The only deliberate divergence: missing `type: 'json'` warns instead of
+// throwing — see the JSON branch below.
+const warnedMissingJsonAttributePairs = new Set<string>();
+// Soft cap so a long-lived process (watch mode, --runInBand) can't grow the
+// set without bound. When we hit it we drop everything; users see at most one
+// extra repeated warning per pair, which is benign.
+const MAX_WARNED_PAIRS = 10_000;
+
+function isJsonModule(modulePath: string): boolean {
+  return (
+    modulePath.endsWith('.json') ||
+    modulePath.startsWith('data:application/json')
+  );
+}
+
+// Avoid dumping the full payload of data: URIs (or other very long specifiers)
+// into stderr.
+function describeForWarning(modulePath: string): string {
+  if (modulePath.startsWith('data:')) {
+    const comma = modulePath.indexOf(',');
+    if (comma > 0) return `${modulePath.slice(0, comma)},…`;
+  }
+  return modulePath;
+}
+
+function makeImportAttributeError(
+  code:
+    | 'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED'
+    | 'ERR_IMPORT_ATTRIBUTE_MISSING'
+    | 'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
+  message: string,
+): NodeJS.ErrnoException {
+  const error: NodeJS.ErrnoException = new TypeError(message);
+  error.code = code;
+  return error;
+}
+
+export function validateImportAttributes(
+  modulePath: string,
+  attributes: ImportAttributes,
+  referencingIdentifier: string,
+): void {
+  for (const key of Object.keys(attributes)) {
+    if (key !== 'type') {
+      throw makeImportAttributeError(
+        'ERR_IMPORT_ATTRIBUTE_UNSUPPORTED',
+        `Import attribute "${key}" with value "${attributes[key]}" is not supported (importing "${modulePath}" from ${referencingIdentifier})`,
+      );
+    }
+  }
+
+  const declaredType = attributes.type;
+  const isJson = isJsonModule(modulePath);
+
+  if (isJson) {
+    if (declaredType === undefined) {
+      // TODO(jest next major): match Node and throw
+      // ERR_IMPORT_ATTRIBUTE_MISSING here. Until then, warn so existing users
+      // without `with { type: 'json' }` keep working.
+      const dedupeKey = `${referencingIdentifier}::${modulePath}`;
+      if (!warnedMissingJsonAttributePairs.has(dedupeKey)) {
+        if (warnedMissingJsonAttributePairs.size >= MAX_WARNED_PAIRS) {
+          warnedMissingJsonAttributePairs.clear();
+        }
+        warnedMissingJsonAttributePairs.add(dedupeKey);
+        const moduleLabel = describeForWarning(modulePath);
+        console.warn(
+          'Jest: importing JSON without an import attribute is deprecated and will be a hard error in the next major. ' +
+            `Update the import of "${moduleLabel}" (from ${referencingIdentifier}): ` +
+            "use `with { type: 'json' }` for static imports, or pass " +
+            "`{ with: { type: 'json' } }` as the second argument to dynamic `import()`.",
+        );
+      }
+      return;
+    }
+    if (declaredType !== 'json') {
+      throw makeImportAttributeError(
+        'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
+        `Module "${modulePath}" is not of type "${declaredType}"`,
+      );
+    }
+    return;
+  }
+
+  // Non-JSON (implicit-type) module. Per HTML spec, the default type cannot
+  // be re-asserted, so any explicit `type` attribute is rejected.
+  if (declaredType !== undefined) {
+    throw makeImportAttributeError(
+      'ERR_IMPORT_ATTRIBUTE_TYPE_INCOMPATIBLE',
+      `Module "${modulePath}" is not of type "${declaredType}"`,
+    );
+  }
 }
 
 const ESM_TRANSFORM_OPTIONS: TransformOptions = {
@@ -387,7 +502,7 @@ export class EsmLoader {
         `moduleRequests unavailable on ${modulePath}`,
       );
       const deps: Array<string> = [];
-      for (const {specifier} of module.moduleRequests) {
+      for (const {specifier, attributes} of module.moduleRequests) {
         const resolved = this.resolveSpecifierForSyncGraph(
           modulePath,
           specifier,
@@ -397,6 +512,7 @@ export class EsmLoader {
           mode,
         );
         if (resolved === null) return null;
+        validateImportAttributes(resolved.modulePath, attributes, modulePath);
         deps.push(resolved.cacheKey);
         if (resolved.enqueue) worklist.push(resolved.enqueue);
       }
@@ -518,13 +634,13 @@ export class EsmLoader {
     scratch: Map<string, ScratchEntry>,
     registry: ModuleRegistry | Map<string, JestModule>,
     mode: SyncEsmMode,
-  ): {cacheKey: string; enqueue: WorklistEntry | null} | null {
+  ): ResolvedSyncSpecifier | null {
     if (specifier === '@jest/globals') {
       const cacheKey = `@jest/globals/${referencingIdentifier}`;
       const ok = this.tryCommitSynthetic(cacheKey, registry, scratch, () =>
         this.jestGlobals.esmGlobalsModule(referencingIdentifier, context),
       );
-      return ok ? {cacheKey, enqueue: null} : null;
+      return ok ? {cacheKey, enqueue: null, modulePath: cacheKey} : null;
     }
 
     if (specifier.startsWith('data:')) {
@@ -532,6 +648,7 @@ export class EsmLoader {
       return {
         cacheKey,
         enqueue: {cacheKey, modulePath: specifier},
+        modulePath: specifier,
       };
     }
     specifier = stripFileScheme(specifier);
@@ -551,7 +668,11 @@ export class EsmLoader {
         mode,
       );
       if (mocked === null) return null;
-      return {cacheKey: mocked.cacheKey, enqueue: null};
+      return {
+        cacheKey: mocked.cacheKey,
+        enqueue: null,
+        modulePath: specifierPath,
+      };
     }
 
     if (this.resolution.isCoreModule(specifierPath)) {
@@ -559,6 +680,7 @@ export class EsmLoader {
       return {
         cacheKey,
         enqueue: {cacheKey, modulePath: specifierPath},
+        modulePath: specifierPath,
       };
     }
 
@@ -586,12 +708,13 @@ export class EsmLoader {
           context,
         ),
       );
-      return ok ? {cacheKey, enqueue: null} : null;
+      return ok ? {cacheKey, enqueue: null, modulePath: resolved} : null;
     }
 
     return {
       cacheKey,
       enqueue: {cacheKey, modulePath: resolved},
+      modulePath: resolved,
     };
   }
 
@@ -762,7 +885,7 @@ export class EsmLoader {
       `moduleRequests unavailable on ${specifier}`,
     );
     const deps: Array<string> = [];
-    for (const {specifier: depSpec} of module.moduleRequests) {
+    for (const {specifier: depSpec, attributes} of module.moduleRequests) {
       const resolved = this.resolveSpecifierForSyncGraph(
         specifier,
         depSpec,
@@ -772,6 +895,7 @@ export class EsmLoader {
         mode,
       );
       if (resolved === null) return null;
+      validateImportAttributes(resolved.modulePath, attributes, specifier);
       deps.push(resolved.cacheKey);
       if (resolved.enqueue) worklist.push(resolved.enqueue);
     }
@@ -805,9 +929,17 @@ export class EsmLoader {
     specifier: string,
     identifier: string,
     context: VMContext,
+    importAttributes?: ImportAttributes,
   ): Promise<VMModule> {
     return this.resolveModule<VMModule>(specifier, identifier, context).then(
-      m => this.linkAndEvaluateModule(m),
+      m => {
+        validateImportAttributes(
+          m.identifier,
+          importAttributes ?? {},
+          identifier,
+        );
+        return this.linkAndEvaluateModule(m);
+      },
     );
   }
 
@@ -1070,13 +1202,20 @@ export class EsmLoader {
     if (module.status === 'unlinked') {
       this.linkingMap.set(
         module,
-        module.link((specifier, referencingModule) =>
-          this.resolveModule(
+        module.link(async (specifier, referencingModule, extra) => {
+          const resolved = await this.resolveModule<VMModule>(
             specifier,
             referencingModule.identifier,
             referencingModule.context,
-          ),
-        ),
+          );
+          const extraAttrs = extra as ModuleLinkExtra | undefined;
+          validateImportAttributes(
+            resolved.identifier,
+            extraAttrs?.attributes ?? extraAttrs?.assert ?? {},
+            referencingModule.identifier,
+          );
+          return resolved;
+        }),
       );
     }
 
@@ -1223,6 +1362,7 @@ export class EsmLoader {
   private dynamicImport = async (
     specifier: string,
     referencingModule: VMModule,
+    importAttributes?: ImportAttributes,
   ): Promise<VMModule> => {
     invariant(
       runtimeSupportsVmModules,
@@ -1238,6 +1378,11 @@ export class EsmLoader {
       specifier,
       referencingModule.identifier,
       referencingModule.context,
+    );
+    validateImportAttributes(
+      dyn.identifier,
+      importAttributes ?? {},
+      referencingModule.identifier,
     );
     return this.linkAndEvaluateModule(dyn);
   };
