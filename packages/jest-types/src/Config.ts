@@ -211,6 +211,7 @@ export type DefaultOptions = {
   watch: boolean;
   watchPathIgnorePatterns: Array<string>;
   watchman: boolean;
+  workerGracefulExitTimeout: number;
   workerThreads: boolean;
 };
 
@@ -322,6 +323,7 @@ export type GlobalConfig = {
     path: string;
     config: Record<string, unknown>;
   }> | null;
+  workerGracefulExitTimeout?: number;
   workerIdleMemoryLimit?: number;
   // TODO: make non-optional in Jest 30
   workerThreads?: boolean;
@@ -492,6 +494,7 @@ export type Argv = Arguments<
     watchAll: boolean;
     watchman: boolean;
     watchPathIgnorePatterns: Array<string>;
+    workerGracefulExitTimeout: number;
     workerIdleMemoryLimit: number | string;
     workerThreads: boolean;
   }>
