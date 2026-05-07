@@ -1,5 +1,7 @@
 ## main
 
+## 30.4.0
+
 ### Features
 
 - `[babel-jest]` Support collecting coverage from `.mts`, `.cts` (and other) files ([#15994](https://github.com/jestjs/jest/pull/15994))
