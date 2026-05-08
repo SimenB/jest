@@ -102,8 +102,7 @@ export function buildCoreSyntheticModule(
 // Builds a SyntheticModule wrapping a CJS module's `module.exports` for
 // import-from-ESM. Merges cjs-module-lexer's static export list with the
 // runtime keys of the actual exports object (lexer can miss
-// `Object.assign`-style patterns). Honors the Babel/Webpack `__esModule`
-// convention: when set, `cjs.default` becomes the ESM `default`.
+// `Object.assign`-style patterns).
 export function buildCjsAsEsmSyntheticModule(
   from: string,
   modulePath: string,
@@ -126,9 +125,8 @@ export function buildCjsAsEsmSyntheticModule(
   ]);
 
   const cjsExports = [...allCandidates].filter(exportName => {
-    // we don't wanna respect any exports _named_ default as a named export
-    // __esModule is a Babel/Webpack metadata flag, not a real export
-    if (exportName === 'default' || exportName === '__esModule') {
+    // `default` is handled separately below as the whole module.exports.
+    if (exportName === 'default') {
       return false;
     }
     return cjsRecord
@@ -136,16 +134,15 @@ export function buildCjsAsEsmSyntheticModule(
       : false;
   });
 
-  const defaultExport =
-    cjsRecord?.__esModule === true ? cjsRecord.default : cjs;
-
   return new SyntheticModule(
     [...cjsExports, 'default'],
     function () {
       for (const exportName of cjsExports) {
         this.setExport(exportName, (cjs as any)[exportName]);
       }
-      this.setExport('default', defaultExport);
+      // module.exports is the ESM default, matching Node's CJS-from-ESM behavior.
+      // __esModule is not honored — see Node docs on named exports from CJS.
+      this.setExport('default', cjs);
     },
     {context, identifier: modulePath},
   );

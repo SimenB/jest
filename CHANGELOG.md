@@ -4,6 +4,10 @@
 
 - `[jest-config, jest-core, jest-runner, jest-schemas, jest-types]` Allow custom runner configuration options via tuple format `['runner-path', {options}]` ([#16141](https://github.com/jestjs/jest/pull/16141))
 
+### Fixes
+
+- `[jest-runtime]` Align CJS-from-ESM default export with Node: `module.exports` is always the ESM default, `__esModule` unwrapping is no longer applied ([#16143](https://github.com/jestjs/jest/pull/16143))
+
 ## 30.4.0
 
 ### Features
