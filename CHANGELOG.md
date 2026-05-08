@@ -1,5 +1,7 @@
 ## main
 
+## 30.4.1
+
 ### Features
 
 - `[jest-config, jest-core, jest-runner, jest-schemas, jest-types]` Allow custom runner configuration options via tuple format `['runner-path', {options}]` ([#16141](https://github.com/jestjs/jest/pull/16141))
