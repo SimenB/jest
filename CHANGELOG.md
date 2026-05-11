@@ -1,5 +1,9 @@
 ## main
 
+### Chore & Maintenance
+
+- `[jest-runtime]` Avoid magical `null` value in ESM loader ([#16160](https://github.com/jestjs/jest/pull/16160))
+
 ## 30.4.2
 
 ### Fixes
