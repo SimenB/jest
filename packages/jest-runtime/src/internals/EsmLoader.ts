@@ -14,13 +14,13 @@ import {
   type Module as VMModule,
 } from 'node:vm';
 import type {JestEnvironment, JestImportMeta} from '@jest/environment';
-import {invariant, isError, isPromise} from 'jest-util';
+import {invariant, isPromise} from 'jest-util';
 import {noop} from '../helpers';
 import type {CjsExportsCache} from './CjsExportsCache';
 import type {FileCache} from './FileCache';
 import type {JestGlobals} from './JestGlobals';
 import type {MockState} from './MockState';
-import {isCjsParseError} from './ModuleExecutor';
+import {CjsParseError} from './ModuleExecutor';
 import type {ModuleRegistries} from './ModuleRegistries';
 import {type Resolution, isWasm} from './Resolution';
 import type {TestState} from './TestState';
@@ -703,14 +703,21 @@ export class EsmLoader {
       !isWasm(resolved) &&
       !this.shouldLoadAsEsm(resolved)
     ) {
-      const ok = this.tryCommitSynthetic(cacheKey, registry, scratch, () =>
-        this.buildCjsAsEsmSyntheticModule(
-          referencingIdentifier,
-          resolved,
-          context,
-        ),
-      );
-      return ok ? {cacheKey, enqueue: null, modulePath: resolved} : LOAD_ASYNC;
+      try {
+        const ok = this.tryCommitSynthetic(cacheKey, registry, scratch, () =>
+          this.buildCjsAsEsmSyntheticModule(
+            referencingIdentifier,
+            resolved,
+            context,
+          ),
+        );
+        return ok
+          ? {cacheKey, enqueue: null, modulePath: resolved}
+          : LOAD_ASYNC;
+      } catch (error) {
+        if (!(error instanceof CjsParseError)) throw error;
+        // File has ESM syntax but no ESM marker — fall through to the enqueue path.
+      }
     }
 
     return {
@@ -989,13 +996,15 @@ export class EsmLoader {
       let transformResolve: () => void;
       let transformReject: (error?: unknown) => void;
 
-      this.transformCache.setMutex(
-        cacheKey,
-        new Promise((resolve, reject) => {
-          transformResolve = resolve;
-          transformReject = reject;
-        }),
-      );
+      const mutex = new Promise<void>((resolve, reject) => {
+        transformResolve = resolve;
+        transformReject = reject;
+      });
+      // Prevent an unhandled-rejection warning when no concurrent caller is
+      // awaiting the mutex — the originating caller re-throws the error itself.
+      // Concurrent waiters still see the rejection because they await `mutex`.
+      mutex.catch(noop);
+      this.transformCache.setMutex(cacheKey, mutex);
 
       invariant(
         transformResolve! && transformReject!,
@@ -1286,17 +1295,8 @@ export class EsmLoader {
     try {
       synthetic = this.buildCjsAsEsmSyntheticModule(from, modulePath, context);
     } catch (error) {
-      if (!isCjsParseError(error)) {
-        throw error;
-      }
-      // The file may contain ESM syntax with no ESM marker (.mjs /
-      // "type":"module") - try loading as native ESM. If the ESM parser also
-      // rejects it, the original CJS error was the genuine one.
-      return this.loadEsmModule(modulePath).catch(esmError => {
-        throw isError(esmError) && esmError.name === 'SyntaxError'
-          ? error
-          : esmError;
-      });
+      if (!(error instanceof CjsParseError)) throw error;
+      return this.loadEsmModule(modulePath);
     }
 
     const evaluated = evaluateSyntheticModule(synthetic);

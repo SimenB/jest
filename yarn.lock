@@ -9244,10 +9244,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cjs-module-lexer@npm:^2.1.0":
-  version: 2.1.0
-  resolution: "cjs-module-lexer@npm:2.1.0"
-  checksum: 10/97cf8e7ddbf685ce0fe1a89349f42a015e89ddf02f1f0d764ddb8a07bd642d58a036c21b5cae078cdf6a96b332b95f806948d772adcd2c346ce5a897f5feefb7
+"cjs-module-lexer@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "cjs-module-lexer@npm:2.2.0"
+  checksum: 10/fc8eb5c1919504366d8260a150d93c4e857740e770467dc59ca0cc34de4b66c93075559a5af65618f359187866b1be40e036f4e1a1bab2f1e06001c216415f74
   languageName: node
   linkType: hard
 
@@ -10910,10 +10910,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"es-module-lexer@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "es-module-lexer@npm:2.0.0"
-  checksum: 10/b075855289b5f40ee496f3d7525c5c501d029c3da15c22298a0030d625bf36d1da0768b26278f7f4bada2a602459b505888e20b77c414fba5da5619b0e84dbd1
+"es-module-lexer@npm:^2.0.0, es-module-lexer@npm:^2.1.0":
+  version: 2.1.0
+  resolution: "es-module-lexer@npm:2.1.0"
+  checksum: 10/554c4374e78a812a1fa3673871ce7d42236438c414ea80c2ec35521cd9bb26d1d9155287529057d07431fd91df50d6a26d9bee5afd755fb7f6f7c81905a03956
   languageName: node
   linkType: hard
 
@@ -14754,8 +14754,9 @@ __metadata:
     "@types/graceful-fs": "npm:^4.1.9"
     "@types/node": "npm:*"
     chalk: "npm:^4.1.2"
-    cjs-module-lexer: "npm:^2.1.0"
+    cjs-module-lexer: "npm:^2.2.0"
     collect-v8-coverage: "npm:^1.0.2"
+    es-module-lexer: "npm:^2.1.0"
     glob: "npm:^10.5.0"
     graceful-fs: "npm:^4.2.11"
     jest-environment-node: "workspace:*"
