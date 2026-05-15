@@ -99,9 +99,9 @@ jest.mocked(obj.method).mockReturnValue(x); // typed cast for already-mocked
 Never:
 
 ```ts
-jest.fn().mockReturnValue(x)        // widens to UnknownFunction
-(x as jest.Mock).mockReturnValue(y) // cast soup
-{foo: jest.fn()} as unknown as Real // construct typed instead
+jest.fn().mockReturnValue(x); // widens to UnknownFunction
+(x as jest.Mock).mockReturnValue(y); // cast soup
+({foo: jest.fn()}) as unknown as Real; // construct typed instead
 ```
 
 `beforeEach(() => jest.clearAllMocks())` fails `typecheck:tests` (return type widens). Use a block body: `beforeEach(() => { jest.clearAllMocks(); })`.

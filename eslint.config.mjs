@@ -817,7 +817,14 @@ const config = defineConfig(
       'unicorn/prefer-number-properties': 'off',
     },
   },
-
+  // Instruction files for AI agents
+  {
+    files: ['**/CLAUDE.md/**', '.github/copilot-instructions.md/**'],
+    rules: {
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off',
+    },
+  },
   {
     ignores: [
       '!.*',

@@ -23,11 +23,13 @@ interface Reporter {
 ## Configuring reporters
 
 ```js
-reporters: [
-  'default',                                         // DefaultReporter
-  ['jest-junit', {outputDirectory: './reports'}],
-  ['<rootDir>/my-reporter.js', {}],
-],
+module.exports = {
+  reporters: [
+    'default', // DefaultReporter
+    ['jest-junit', {outputDirectory: './reports'}],
+    ['<rootDir>/my-reporter.js', {}],
+  ],
+};
 ```
 
 Constructor receives `(globalConfig, reporterOptions, reporterContext)`. `SummaryReporter` is always appended by jest-core. Without `'default'` in the list, `DefaultReporter` is not added.
