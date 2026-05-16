@@ -11,13 +11,15 @@ import * as path from 'node:path';
 import anymatch from 'anymatch';
 import watchman from 'fb-watchman';
 import fs from 'graceful-fs';
-import picomatch from 'picomatch';
+import {
+  ADD_EVENT,
+  ALL_EVENT,
+  CHANGE_EVENT,
+  DELETE_EVENT,
+  isFileIncluded,
+} from './common';
 
-const CHANGE_EVENT = 'change';
-const DELETE_EVENT = 'delete';
-const ADD_EVENT = 'add';
-const ALL_EVENT = 'all';
-const SUB_NAME = 'sane-sub';
+const SUB_NAME = 'jest-haste-map';
 
 // Dedupe repeated "Recrawled this watch N times" warnings from watchman.
 const RECRAWL_WARNINGS = [];
@@ -46,15 +48,6 @@ function isRecrawlWarningDupe(warningMessage) {
   return false;
 }
 
-function isFileIncluded(globs, dot, doIgnore, relativePath) {
-  if (doIgnore(relativePath)) {
-    return false;
-  }
-  return globs.length > 0
-    ? globs.some(glob => picomatch(glob, {dot})(relativePath))
-    : dot || picomatch('**/*')(relativePath);
-}
-
 /**
  * Watches `dir`.
  *
@@ -72,8 +65,7 @@ export default function WatchmanWatcher(dir, opts) {
   if (!Array.isArray(this.globs)) {
     this.globs = [this.globs];
   }
-  this.hasIgnore =
-    Boolean(opts.ignored) && !(Array.isArray(opts) && opts.length > 0);
+  this.hasIgnore = Boolean(opts.ignored);
   this.doIgnore = opts.ignored ? anymatch(opts.ignored) : () => false;
   if (opts.watchman && opts.watchmanPath) {
     this.watchmanPath = opts.watchmanPath;
@@ -236,9 +228,6 @@ WatchmanWatcher.prototype.init = function () {
 
 WatchmanWatcher.prototype.handleChangeEvent = function (resp) {
   assert.equal(resp.subscription, SUB_NAME, 'Invalid subscription event.');
-  if (resp.is_fresh_instance) {
-    this.emit('fresh_instance');
-  }
   if (resp.is_fresh_instance) {
     this.emit('fresh_instance');
   }

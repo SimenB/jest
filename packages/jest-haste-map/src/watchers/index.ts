@@ -66,11 +66,8 @@ export class WatcherDriver {
       ? WatchmanWatcher
       : (ParcelWatcher as unknown as WatcherCtor);
 
-    const statCache = new Map<string, Stats>();
     const results = await Promise.allSettled(
-      this._roots.map(root =>
-        this._createWatcher(Backend, root, onChange, statCache),
-      ),
+      this._roots.map(root => this._createWatcher(Backend, root, onChange)),
     );
     const fulfilled = results
       .filter(r => r.status === 'fulfilled')
@@ -103,14 +100,12 @@ export class WatcherDriver {
     Backend: WatcherCtor,
     root: string,
     onChange: OnChangeCallback,
-    statCache: Map<string, Stats>,
   ): Promise<IWatcher> {
     const watcher = new Backend(root, {
       dot: true,
       glob: this._extensions.map(ext => `**/*.${ext}`),
       ignored: this._ignorePattern,
       snapshotPath: this._snapshotPath(root),
-      statCache,
       useWatchman: this._useWatchman,
     });
 
