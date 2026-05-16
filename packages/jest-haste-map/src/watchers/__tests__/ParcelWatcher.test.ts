@@ -1,0 +1,306 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import type {EventEmitter} from 'node:events';
+import type * as parcelWatcherType from '@parcel/watcher';
+import * as gracefulFs from 'graceful-fs';
+import type {WatcherOptions} from '../types';
+import {ParcelWatcher} from '../ParcelWatcher';
+
+jest.mock('@parcel/watcher');
+jest.mock('graceful-fs', () => ({
+  ...jest.requireActual<typeof import('graceful-fs')>('graceful-fs'),
+  existsSync: jest.fn(() => false),
+  lstat: jest.fn(),
+}));
+
+const parcelWatcher =
+  jest.requireMock<typeof parcelWatcherType>('@parcel/watcher');
+const mockExistsSync = gracefulFs.existsSync as jest.MockedFunction<
+  typeof gracefulFs.existsSync
+>;
+type LstatSimple = (
+  path: gracefulFs.PathLike,
+  cb: (err: NodeJS.ErrnoException | null, stats: gracefulFs.Stats) => void,
+) => void;
+const mockLstat =
+  gracefulFs.lstat as unknown as jest.MockedFunction<LstatSimple>;
+
+const defaultOpts: WatcherOptions = {
+  dot: true,
+  glob: ['**/*.js'],
+  ignored: undefined,
+  snapshotPath: '/tmp/snapshot',
+  useWatchman: false,
+};
+
+function makeSubscription() {
+  return {unsubscribe: jest.fn(async () => {})};
+}
+
+function flush(): Promise<void> {
+  return new Promise(setImmediate);
+}
+
+describe('ParcelWatcher', () => {
+  let subscribeCallback: parcelWatcherType.SubscribeCallback;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockExistsSync.mockReturnValue(false);
+    (
+      parcelWatcher.subscribe as jest.MockedFunction<
+        typeof parcelWatcher.subscribe
+      >
+    ).mockImplementation(async (_dir, fn) => {
+      subscribeCallback = fn;
+      return makeSubscription();
+    });
+    (
+      parcelWatcher.writeSnapshot as jest.MockedFunction<
+        typeof parcelWatcher.writeSnapshot
+      >
+    ).mockResolvedValue('/tmp/snapshot');
+    (
+      parcelWatcher.getEventsSince as jest.MockedFunction<
+        typeof parcelWatcher.getEventsSince
+      >
+    ).mockResolvedValue([]);
+  });
+
+  function makeWatcher(root = '/root', opts = defaultOpts): ParcelWatcher {
+    return new ParcelWatcher(root, opts);
+  }
+
+  function waitReady(watcher: EventEmitter): Promise<void> {
+    return new Promise((resolve, reject) => {
+      watcher.once('ready', resolve);
+      watcher.once('error', reject);
+    });
+  }
+
+  it('emits ready after subscribing', async () => {
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+    expect(parcelWatcher.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps create → add events', async () => {
+    const fakeStat = {isDirectory: () => false, mtime: new Date(), size: 100};
+    mockLstat.mockImplementation((_p, cb) =>
+      cb(null, fakeStat as gracefulFs.Stats),
+    );
+
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+
+    subscribeCallback(null, [{path: '/root/file.js', type: 'create'}]);
+    await flush();
+
+    expect(onChange).toHaveBeenCalledWith('add', 'file.js', '/root', fakeStat);
+  });
+
+  it('maps update → change events', async () => {
+    const fakeStat = {isDirectory: () => false, mtime: new Date(), size: 100};
+    mockLstat.mockImplementation((_p, cb) =>
+      cb(null, fakeStat as gracefulFs.Stats),
+    );
+
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+
+    subscribeCallback(null, [{path: '/root/file.js', type: 'update'}]);
+    await flush();
+
+    expect(onChange).toHaveBeenCalledWith(
+      'change',
+      'file.js',
+      '/root',
+      fakeStat,
+    );
+  });
+
+  it('maps delete → delete events without stat', async () => {
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+
+    subscribeCallback(null, [{path: '/root/file.js', type: 'delete'}]);
+    await flush();
+
+    expect(mockLstat).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('delete', 'file.js', '/root');
+  });
+
+  it('drops add/change when lstat errors', async () => {
+    mockLstat.mockImplementation((_p, cb) =>
+      cb(
+        Object.assign(new Error('ENOENT'), {
+          code: 'ENOENT',
+        }) as NodeJS.ErrnoException,
+        null as unknown as gracefulFs.Stats,
+      ),
+    );
+
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+
+    subscribeCallback(null, [{path: '/root/file.js', type: 'create'}]);
+    await flush();
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('emits error when the subscribe callback receives an error', async () => {
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    const onError = jest.fn();
+    watcher.on('error', onError);
+
+    subscribeCallback(new Error('watch error'), []);
+    await flush();
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it('replays events from snapshot when snapshotPath exists', async () => {
+    mockExistsSync.mockReturnValue(true);
+    const fakeStat = {isDirectory: () => false, mtime: new Date(), size: 100};
+    mockLstat.mockImplementation((_p, cb) =>
+      cb(null, fakeStat as gracefulFs.Stats),
+    );
+
+    (
+      parcelWatcher.getEventsSince as jest.MockedFunction<
+        typeof parcelWatcher.getEventsSince
+      >
+    ).mockResolvedValue([{path: '/root/old.js', type: 'create'}]);
+
+    const watcher = makeWatcher();
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+    await waitReady(watcher);
+    await flush();
+
+    expect(parcelWatcher.getEventsSince).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('add', 'old.js', '/root', fakeStat);
+  });
+
+  it('writes snapshot after subscribing', async () => {
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    expect(parcelWatcher.writeSnapshot).toHaveBeenCalledWith(
+      expect.any(String),
+      '/tmp/snapshot',
+      expect.objectContaining({backend: expect.any(String)}),
+    );
+  });
+
+  it('close() calls unsubscribe and writes snapshot', async () => {
+    const subscription = makeSubscription();
+    (
+      parcelWatcher.subscribe as jest.MockedFunction<
+        typeof parcelWatcher.subscribe
+      >
+    ).mockImplementation(async (_dir, fn) => {
+      subscribeCallback = fn;
+      return subscription;
+    });
+
+    const watcher = makeWatcher();
+    await waitReady(watcher);
+
+    jest.clearAllMocks();
+    await watcher.close();
+
+    expect(subscription.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(parcelWatcher.writeSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters events for paths excluded by ignore pattern', async () => {
+    const fakeStat = {isDirectory: () => false, mtime: new Date(), size: 100};
+    mockLstat.mockImplementation((_p, cb) =>
+      cb(null, fakeStat as gracefulFs.Stats),
+    );
+
+    const watcher = makeWatcher('/root', {
+      ...defaultOpts,
+      ignored: /node_modules/,
+    });
+    await waitReady(watcher);
+
+    const onChange = jest.fn();
+    watcher.on('all', onChange);
+
+    subscribeCallback(null, [
+      {path: '/root/node_modules/pkg/index.js', type: 'create'},
+      {path: '/root/src/index.js', type: 'create'},
+    ]);
+    await flush();
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith(
+      'add',
+      'src/index.js',
+      '/root',
+      fakeStat,
+    );
+  });
+
+  describe('backend selection', () => {
+    const originalPlatform = process.platform;
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {value: originalPlatform});
+    });
+
+    it.each<[string, parcelWatcherType.BackendType]>([
+      ['darwin', 'fs-events'],
+      ['linux', 'inotify'],
+      ['win32', 'windows'],
+      ['freebsd', 'brute-force'],
+    ])(
+      'selects %s backend on %s when useWatchman=false',
+      async (platform, backend) => {
+        Object.defineProperty(process, 'platform', {value: platform});
+        const watcher = makeWatcher('/root', {
+          ...defaultOpts,
+          useWatchman: false,
+        });
+        await waitReady(watcher);
+        expect(parcelWatcher.subscribe).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.any(Function),
+          expect.objectContaining({backend}),
+        );
+      },
+    );
+
+    it('selects watchman backend when useWatchman=true', async () => {
+      const watcher = makeWatcher('/root', {...defaultOpts, useWatchman: true});
+      await waitReady(watcher);
+      expect(parcelWatcher.subscribe).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Function),
+        expect.objectContaining({backend: 'watchman'}),
+      );
+    });
+  });
+});

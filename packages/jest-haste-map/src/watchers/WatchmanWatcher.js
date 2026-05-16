@@ -8,28 +8,76 @@
 import {strict as assert} from 'node:assert';
 import {EventEmitter} from 'node:events';
 import * as path from 'node:path';
+import anymatch from 'anymatch';
 import watchman from 'fb-watchman';
 import fs from 'graceful-fs';
-import RecrawlWarning from './RecrawlWarning';
-import common from './common';
+import picomatch from 'picomatch';
 
-const CHANGE_EVENT = common.CHANGE_EVENT;
-const DELETE_EVENT = common.DELETE_EVENT;
-const ADD_EVENT = common.ADD_EVENT;
-const ALL_EVENT = common.ALL_EVENT;
+const CHANGE_EVENT = 'change';
+const DELETE_EVENT = 'delete';
+const ADD_EVENT = 'add';
+const ALL_EVENT = 'all';
 const SUB_NAME = 'sane-sub';
+
+// Dedupe repeated "Recrawled this watch N times" warnings from watchman.
+const RECRAWL_WARNINGS = [];
+const RECRAWL_REGEXP =
+  /Recrawled this watch (\d+) times, most recently because:\n([^:]+)/;
+
+function isRecrawlWarningDupe(warningMessage) {
+  if (typeof warningMessage !== 'string') {
+    return false;
+  }
+  const match = warningMessage.match(RECRAWL_REGEXP);
+  if (!match) {
+    return false;
+  }
+  const count = Number(match[1]);
+  const root = match[2];
+  const existing = RECRAWL_WARNINGS.find(w => w.root === root);
+  if (existing) {
+    if (existing.count >= count) {
+      return true;
+    }
+    existing.count = count;
+    return false;
+  }
+  RECRAWL_WARNINGS.push({count, root});
+  return false;
+}
+
+function isFileIncluded(globs, dot, doIgnore, relativePath) {
+  if (doIgnore(relativePath)) {
+    return false;
+  }
+  return globs.length > 0
+    ? globs.some(glob => picomatch(glob, {dot})(relativePath))
+    : dot || picomatch('**/*')(relativePath);
+}
 
 /**
  * Watches `dir`.
  *
- * @class PollWatcher
+ * @class WatchmanWatcher
  * @param String dir
  * @param {Object} opts
  * @public
  */
 
 export default function WatchmanWatcher(dir, opts) {
-  common.assignOptions(this, opts);
+  opts = opts || {};
+  this.globs = opts.glob || [];
+  this.dot = opts.dot || false;
+  this.ignored = opts.ignored || false;
+  if (!Array.isArray(this.globs)) {
+    this.globs = [this.globs];
+  }
+  this.hasIgnore =
+    Boolean(opts.ignored) && !(Array.isArray(opts) && opts.length > 0);
+  this.doIgnore = opts.ignored ? anymatch(opts.ignored) : () => false;
+  if (opts.watchman && opts.watchmanPath) {
+    this.watchmanPath = opts.watchmanPath;
+  }
   this.root = path.resolve(dir);
   this.init();
 }
@@ -225,7 +273,7 @@ WatchmanWatcher.prototype.handleFileChange = function (changeDescriptor) {
 
   if (
     !(self.capabilities.wildmatch && !this.hasIgnore) &&
-    !common.isFileIncluded(this.globs, this.dot, this.doIgnore, relativePath)
+    !isFileIncluded(this.globs, this.dot, this.doIgnore, relativePath)
   ) {
     return;
   }
@@ -311,7 +359,7 @@ function handleError(self, error) {
 
 function handleWarning(resp) {
   if ('warning' in resp) {
-    if (RecrawlWarning.isRecrawlWarningDupe(resp.warning)) {
+    if (isRecrawlWarningDupe(resp.warning)) {
       return true;
     }
     console.warn(resp.warning);
