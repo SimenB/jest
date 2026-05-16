@@ -93,6 +93,10 @@ export class WatcherDriver {
       .update(root)
       .digest('hex')
       .slice(0, 16);
+    // Snapshot files are never explicitly deleted. When cacheFilePath changes
+    // (config/version bump) new snapshots are written under the new prefix and
+    // old ones are orphaned. They are harmless (never read) but accumulate in
+    // the cache directory until the user clears it manually.
     return `${this._cacheFilePath}.parcel-snapshot.${hash}`;
   }
 

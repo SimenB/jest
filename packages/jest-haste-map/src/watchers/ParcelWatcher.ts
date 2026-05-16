@@ -20,6 +20,10 @@ import {
 } from './common';
 import type {IWatcher, WatcherOptions} from './types';
 
+// WatcherDriver always instantiates WatchmanWatcher directly when useWatchman
+// is true, so the 'watchman' branch below is unreachable through normal Jest
+// operation. It exists so ParcelWatcher can be used standalone (e.g. in tests
+// or custom tooling) with watchman as the parcel backend.
 function pickBackend(useWatchman: boolean): parcelWatcher.BackendType {
   if (useWatchman) {
     return 'watchman';
@@ -107,6 +111,11 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
         }
       }
 
+      // Note: events that occur between getEventsSince and subscribe are not
+      // captured by either call. This is an inherent gap in snapshot-based
+      // startup. In practice haste-map's fdir crawl runs before the watcher
+      // starts and detects any mtime changes, so the impact is limited to the
+      // brief window while the subscription is being established.
       const subscription = await parcelWatcher.subscribe(
         this.root,
         this._handleEvents,
