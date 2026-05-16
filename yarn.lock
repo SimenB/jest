@@ -12510,7 +12510,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fsevents@npm:^2.3.3, fsevents@npm:~2.3.2":
+"fsevents@npm:~2.3.2":
   version: 2.3.3
   resolution: "fsevents@npm:2.3.3"
   dependencies:
@@ -12520,7 +12520,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fsevents@patch:fsevents@npm%3A^2.3.3#optional!builtin<compat/fsevents>, fsevents@patch:fsevents@npm%3A~2.3.2#optional!builtin<compat/fsevents>":
+"fsevents@patch:fsevents@npm%3A~2.3.2#optional!builtin<compat/fsevents>":
   version: 2.3.3
   resolution: "fsevents@patch:fsevents@npm%3A2.3.3#optional!builtin<compat/fsevents>::version=2.3.3&hash=df0bf1"
   dependencies:
@@ -14671,16 +14671,12 @@ __metadata:
     anymatch: "npm:^3.1.3"
     fb-watchman: "npm:^2.0.2"
     fdir: "npm:^6.5.0"
-    fsevents: "npm:^2.3.3"
     graceful-fs: "npm:^4.2.11"
     jest-regex-util: "workspace:*"
     jest-util: "workspace:*"
     jest-worker: "workspace:*"
     picomatch: "npm:^4.0.3"
     slash: "npm:^3.0.0"
-  dependenciesMeta:
-    fsevents:
-      optional: true
   languageName: unknown
   linkType: soft
 

@@ -8,11 +8,11 @@ Key files to know:
 
 - `lib/FileProcessor.ts` — `processFile` (worker dispatch, haste-id extraction, duplicate tracking) and `buildHasteMap` (initial build loop).
 - `lib/CacheManager.ts` — v8 serialize/deserialize for the on-disk cache. **Sync I/O is intentional** — at haste-map's scale, async overhead adds no value and switching to `fs.promises` is not a free win.
-- `lib/walk.ts` — shared `fdir`-backed directory walker used by the node crawler (`crawlers/node.ts` `find`), `FSEventsWatcher.ts` startup, and `NodeWatcher.js` startup (via `watchers/common.js` `recReaddir`). Exports `walk(opts, done): void` (callback-based) and `WalkOptions`, `WalkEntryKind`. Uses `fdir`'s `.withCallback()` API with a bounded callback-driven `lstat` pool (default `Math.max(os.availableParallelism() * 4, 32)` inflight). `fdir` is constructed with `new Fdir({fs})` so it uses `graceful-fs` for `readdir` — mock `graceful-fs.readdir` in tests to control directory traversal. `WalkOptions.statCache` is an optional `Map<string, Stats>` passed by callers that invoke `walk()` multiple times (e.g. once per root): a path already in the map skips its `lstat` call. **The cache must not be stored on watcher instances or passed to runtime (post-startup) walks** — stale stats would be returned for files changed after startup. `find()` and `WatcherDriver.start()` each create a fresh cache, use it for all per-root startup walks, then discard it.
+- `lib/walk.ts` — shared `fdir`-backed directory walker used by the node crawler (`crawlers/node.ts` `find`). Exports `walk(opts, done): void` (callback-based) and `WalkOptions`, `WalkEntryKind`. Uses `fdir`'s `.withCallback()` API with a bounded callback-driven `lstat` pool (default `Math.max(os.availableParallelism() * 4, 32)` inflight). `fdir` is constructed with `new Fdir({fs})` so it uses `graceful-fs` for `readdir` — mock `graceful-fs.readdir` in tests to control directory traversal. `WalkOptions.statCache` is an optional `Map<string, Stats>` passed by callers that invoke `walk()` multiple times (e.g. once per root): a path already in the map skips its `lstat` call. **The cache must not be stored on watcher instances or passed to runtime (post-startup) walks** — stale stats would be returned for files changed after startup. `find()` and `WatcherDriver.start()` each create a fresh cache, use it for all per-root startup walks, then discard it.
 - `watchers/ChangeQueue.ts` — 30 ms debounce, O(1) mtime-dedup via `Set<string>`, copy-on-write for the live map, file-processing dispatch.
 - `crawlers/watchman.ts` — fb-watchman with clock-based incremental updates. `crawlers/node.ts` — `findNative` (`find(1)` shell-out) + `find` (`fdir` via `lib/walk`); `forceNodeFilesystemAPI` gates shell-out vs `fdir`.
 - `watchers/types.ts` — `IWatcher`, `WatcherOptions`, `WatcherCtor`. New backends must implement `IWatcher` and accept `(root: string, opts: WatcherOptions)`.
-- `watchers/WatchmanWatcher.js` — macOS/Linux watchman. `FSEventsWatcher.ts` — macOS native (startup walk via `lib/walk`). `NodeWatcher.js` — cross-platform fallback.
+- `watchers/WatchmanWatcher.js` — watchman backend. `watchers/ParcelWatcher.ts` — `@parcel/watcher`-backed watcher used for all non-watchman paths; picks the native backend per platform (`fs-events`/`inotify`/`windows`/`brute-force`) and uses `writeSnapshot`/`getEventsSince` for incremental startup.
 
 ## Data model
 
@@ -47,4 +47,4 @@ Key files to know:
 
 ## Tests
 
-`src/__tests__/index.test.js` is the large integration suite — mocks `NodeWatcher`/`WatchmanWatcher`, drives events via `mockEmitters[root].emit('all', ...)`. Per-module tests live in `src/lib/__tests__/`, `src/watchers/__tests__/`, `src/crawlers/__tests__/`.
+`src/__tests__/index.test.js` is the large integration suite — mocks `ParcelWatcher`/`WatchmanWatcher`, drives events via `mockEmitters[root].emit('all', ...)`. Per-module tests live in `src/lib/__tests__/`, `src/watchers/__tests__/`, `src/crawlers/__tests__/`.
