@@ -45,6 +45,11 @@ const VCS_IGNORE_GLOBS = ['**/.git', '**/.hg', '**/.sl'];
 // Extract simple directory names from a HasteRegExp and convert to globs so
 // parcel can skip them at the OS-watch level (e.g. node_modules). Complex
 // patterns that can't be expressed as globs are handled by _doIgnore.
+//
+// Ideally we'd pass the regex source directly to parcel's ignoreGlobs, but
+// parcel's API only accepts glob strings (converted to regex by picomatch
+// internally). Once https://github.com/parcel-bundler/watcher/pull/248 lands
+// this whole function can be replaced with passing opts.ignored directly.
 export function ignoredToGlobs(
   ignored: HasteRegExp | undefined,
 ): Array<string> {
