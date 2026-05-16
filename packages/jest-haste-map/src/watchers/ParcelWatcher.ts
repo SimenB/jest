@@ -11,6 +11,7 @@ import * as parcelWatcher from '@parcel/watcher';
 import anymatch from 'anymatch';
 import * as fs from 'graceful-fs';
 import picomatch from 'picomatch';
+import type {HasteRegExp} from '../types';
 import type {IWatcher, WatcherOptions} from './types';
 
 function pickBackend(useWatchman: boolean): parcelWatcher.BackendType {
@@ -34,9 +35,28 @@ const DELETE_EVENT = 'delete';
 const ADD_EVENT = 'add';
 const ALL_EVENT = 'all';
 
-// VCS dirs are always present in opts.ignored (added by HasteMap constructor).
-// Pass them explicitly to parcel so it doesn't watch inside them.
 const VCS_IGNORE_GLOBS = ['**/.git', '**/.hg', '**/.sl'];
+
+// Extract simple directory names from a HasteRegExp and convert to globs so
+// parcel can skip them at the OS-watch level (e.g. node_modules).
+// Complex patterns that can't be expressed as globs are handled defensively
+// by _handleEvents via _doIgnore.
+function ignoredToGlobs(ignored: HasteRegExp | undefined): Array<string> {
+  if (!(ignored instanceof RegExp)) {
+    return VCS_IGNORE_GLOBS;
+  }
+  const extra = ignored.source
+    .split('|')
+    .map(s =>
+      s
+        .replaceAll(/[()[\]{}^$*+?]/g, '')
+        .replaceAll('\\.', '.')
+        .trim(),
+    )
+    .filter(name => /^[\w.-]+$/.test(name))
+    .map(name => `**/${name}`);
+  return [...new Set([...VCS_IGNORE_GLOBS, ...extra])];
+}
 
 function isFileIncluded(
   globs: ReadonlyArray<string>,
@@ -58,6 +78,7 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
   private readonly _glob: ReadonlyArray<string>;
   private readonly _doIgnore: (path: string) => boolean;
   private readonly _backend: parcelWatcher.BackendType;
+  private readonly _ignoreGlobs: Array<string>;
   private readonly _snapshotPath: string;
   private _subscription: parcelWatcher.AsyncSubscription | null = null;
 
@@ -72,6 +93,7 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
     this._glob = opts.glob;
     this._doIgnore = opts.ignored ? anymatch(opts.ignored) : () => false;
     this._backend = pickBackend(opts.useWatchman);
+    this._ignoreGlobs = ignoredToGlobs(opts.ignored);
     this._snapshotPath = opts.snapshotPath ?? '';
 
     setImmediate(() => this._start());
@@ -80,19 +102,17 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
   private async _start(): Promise<void> {
     const parcelOpts: parcelWatcher.Options = {
       backend: this._backend,
-      ignore: VCS_IGNORE_GLOBS,
+      ignore: this._ignoreGlobs,
     };
 
     try {
-      if (fs.existsSync(this._snapshotPath)) {
-        const events = await parcelWatcher.getEventsSince(
+      let replayEvents: Array<parcelWatcher.Event> = [];
+      if (this._snapshotPath && fs.existsSync(this._snapshotPath)) {
+        replayEvents = await parcelWatcher.getEventsSince(
           this.root,
           this._snapshotPath,
           parcelOpts,
         );
-        if (events.length > 0) {
-          this._handleEvents(null, events);
-        }
       }
 
       this._subscription = await parcelWatcher.subscribe(
@@ -101,13 +121,19 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
         parcelOpts,
       );
 
-      await parcelWatcher.writeSnapshot(
-        this.root,
-        this._snapshotPath,
-        parcelOpts,
-      );
+      if (this._snapshotPath) {
+        await parcelWatcher.writeSnapshot(
+          this.root,
+          this._snapshotPath,
+          parcelOpts,
+        );
+      }
 
       this.emit('ready');
+
+      if (replayEvents.length > 0) {
+        setImmediate(() => this._handleEvents(null, replayEvents));
+      }
     } catch (error) {
       this.emit('error', error);
     }
@@ -147,13 +173,16 @@ export class ParcelWatcher extends EventEmitter implements IWatcher {
   async close(): Promise<void> {
     await this._subscription?.unsubscribe();
     this._subscription = null;
-    const parcelOpts: parcelWatcher.Options = {
-      backend: this._backend,
-      ignore: VCS_IGNORE_GLOBS,
-    };
-    await parcelWatcher
-      .writeSnapshot(this.root, this._snapshotPath, parcelOpts)
-      .catch(() => undefined);
+    if (this._snapshotPath) {
+      try {
+        await parcelWatcher.writeSnapshot(this.root, this._snapshotPath, {
+          backend: this._backend,
+          ignore: this._ignoreGlobs,
+        });
+      } catch {
+        // best-effort
+      }
+    }
     this.removeAllListeners();
   }
 }

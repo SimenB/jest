@@ -194,7 +194,9 @@ describe('ParcelWatcher', () => {
 
     const watcher = makeWatcher();
     const onChange = jest.fn();
-    watcher.on('all', onChange);
+    // Attach listener inside 'ready' handler — mirrors WatcherDriver behaviour
+    // and verifies replay fires after 'ready' (not before).
+    watcher.once('ready', () => watcher.on('all', onChange));
     await waitReady(watcher);
     await flush();
 
