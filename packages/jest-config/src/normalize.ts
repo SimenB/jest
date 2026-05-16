@@ -813,6 +813,14 @@ export default async function normalize(
 
           value.hasteImplModulePath = resolvedHasteImpl || undefined;
         }
+        value.backend ??= 'default';
+        if (value.backend !== 'default' && value.backend !== 'parcel') {
+          throw createConfigError(
+            `  Option "haste.backend" must be one of "default" or "parcel", but got "${
+              value.backend as string
+            }".`,
+          );
+        }
         break;
       case 'projects':
         value = (oldOptions[key] || [])
@@ -1057,7 +1065,11 @@ export default async function normalize(
     return newOptions;
   }, newOptions);
 
-  if (options.watchman && options.haste?.enableSymlinks) {
+  if (
+    options.watchman &&
+    options.haste?.enableSymlinks &&
+    newOptions.haste?.backend !== 'parcel'
+  ) {
     throw new ValidationError(
       'Validation Error',
       'haste.enableSymlinks is incompatible with watchman',
