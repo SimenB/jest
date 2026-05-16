@@ -6,6 +6,7 @@
  */
 
 import type {EventEmitter} from 'node:events';
+import * as path from 'node:path';
 import type * as parcelWatcherType from '@parcel/watcher';
 import * as gracefulFs from 'graceful-fs';
 import type {WatcherOptions} from '../types';
@@ -29,6 +30,9 @@ type LstatSimple = (
 ) => void;
 const mockLstat =
   gracefulFs.lstat as unknown as jest.MockedFunction<LstatSimple>;
+
+// Use path.resolve so paths are correct on all platforms (e.g. 'D:\root' on Windows).
+const ROOT = path.resolve('/root');
 
 const defaultOpts: WatcherOptions = {
   dot: true,
@@ -72,7 +76,7 @@ describe('ParcelWatcher', () => {
     ).mockResolvedValue([]);
   });
 
-  function makeWatcher(root = '/root', opts = defaultOpts): ParcelWatcher {
+  function makeWatcher(root = ROOT, opts = defaultOpts): ParcelWatcher {
     return new ParcelWatcher(root, opts);
   }
 
@@ -101,10 +105,12 @@ describe('ParcelWatcher', () => {
     const onChange = jest.fn();
     watcher.on('all', onChange);
 
-    subscribeCallback(null, [{path: '/root/file.js', type: 'create'}]);
+    subscribeCallback(null, [
+      {path: path.join(ROOT, 'file.js'), type: 'create'},
+    ]);
     await flush();
 
-    expect(onChange).toHaveBeenCalledWith('add', 'file.js', '/root', fakeStat);
+    expect(onChange).toHaveBeenCalledWith('add', 'file.js', ROOT, fakeStat);
   });
 
   it('maps update → change events', async () => {
@@ -119,15 +125,12 @@ describe('ParcelWatcher', () => {
     const onChange = jest.fn();
     watcher.on('all', onChange);
 
-    subscribeCallback(null, [{path: '/root/file.js', type: 'update'}]);
+    subscribeCallback(null, [
+      {path: path.join(ROOT, 'file.js'), type: 'update'},
+    ]);
     await flush();
 
-    expect(onChange).toHaveBeenCalledWith(
-      'change',
-      'file.js',
-      '/root',
-      fakeStat,
-    );
+    expect(onChange).toHaveBeenCalledWith('change', 'file.js', ROOT, fakeStat);
   });
 
   it('maps delete → delete events without stat', async () => {
@@ -137,11 +140,13 @@ describe('ParcelWatcher', () => {
     const onChange = jest.fn();
     watcher.on('all', onChange);
 
-    subscribeCallback(null, [{path: '/root/file.js', type: 'delete'}]);
+    subscribeCallback(null, [
+      {path: path.join(ROOT, 'file.js'), type: 'delete'},
+    ]);
     await flush();
 
     expect(mockLstat).not.toHaveBeenCalled();
-    expect(onChange).toHaveBeenCalledWith('delete', 'file.js', '/root');
+    expect(onChange).toHaveBeenCalledWith('delete', 'file.js', ROOT);
   });
 
   it('drops add/change when lstat returns ENOENT', async () => {
@@ -160,7 +165,9 @@ describe('ParcelWatcher', () => {
     const onChange = jest.fn();
     watcher.on('all', onChange);
 
-    subscribeCallback(null, [{path: '/root/file.js', type: 'create'}]);
+    subscribeCallback(null, [
+      {path: path.join(ROOT, 'file.js'), type: 'create'},
+    ]);
     await flush();
 
     expect(onChange).not.toHaveBeenCalled();
@@ -182,7 +189,9 @@ describe('ParcelWatcher', () => {
     const onError = jest.fn();
     watcher.on('error', onError);
 
-    subscribeCallback(null, [{path: '/root/file.js', type: 'create'}]);
+    subscribeCallback(null, [
+      {path: path.join(ROOT, 'file.js'), type: 'create'},
+    ]);
     await flush();
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
@@ -226,7 +235,7 @@ describe('ParcelWatcher', () => {
       parcelWatcher.getEventsSince as jest.MockedFunction<
         typeof parcelWatcher.getEventsSince
       >
-    ).mockResolvedValue([{path: '/root/old.js', type: 'create'}]);
+    ).mockResolvedValue([{path: path.join(ROOT, 'old.js'), type: 'create'}]);
 
     const watcher = makeWatcher();
     const onChange = jest.fn();
@@ -237,7 +246,7 @@ describe('ParcelWatcher', () => {
     await flush();
 
     expect(parcelWatcher.getEventsSince).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('add', 'old.js', '/root', fakeStat);
+    expect(onChange).toHaveBeenCalledWith('add', 'old.js', ROOT, fakeStat);
   });
 
   it('writes snapshot after subscribing', async () => {
@@ -302,7 +311,7 @@ describe('ParcelWatcher', () => {
       cb(null, fakeStat as gracefulFs.Stats),
     );
 
-    const watcher = makeWatcher('/root', {
+    const watcher = makeWatcher(ROOT, {
       ...defaultOpts,
       ignored: /node_modules/,
     });
@@ -312,16 +321,19 @@ describe('ParcelWatcher', () => {
     watcher.on('all', onChange);
 
     subscribeCallback(null, [
-      {path: '/root/node_modules/pkg/index.js', type: 'create'},
-      {path: '/root/src/index.js', type: 'create'},
+      {
+        path: path.join(ROOT, 'node_modules', 'pkg', 'index.js'),
+        type: 'create',
+      },
+      {path: path.join(ROOT, 'src', 'index.js'), type: 'create'},
     ]);
     await flush();
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(
       'add',
-      'src/index.js',
-      '/root',
+      path.join('src', 'index.js'),
+      ROOT,
       fakeStat,
     );
   });
@@ -342,7 +354,7 @@ describe('ParcelWatcher', () => {
       'selects %s backend on %s when useWatchman=false',
       async (platform, backend) => {
         Object.defineProperty(process, 'platform', {value: platform});
-        const watcher = makeWatcher('/root', {
+        const watcher = makeWatcher(ROOT, {
           ...defaultOpts,
           useWatchman: false,
         });
@@ -356,7 +368,7 @@ describe('ParcelWatcher', () => {
     );
 
     it('selects watchman backend when useWatchman=true', async () => {
-      const watcher = makeWatcher('/root', {...defaultOpts, useWatchman: true});
+      const watcher = makeWatcher(ROOT, {...defaultOpts, useWatchman: true});
       await waitReady(watcher);
       expect(parcelWatcher.subscribe).toHaveBeenCalledWith(
         expect.any(String),
