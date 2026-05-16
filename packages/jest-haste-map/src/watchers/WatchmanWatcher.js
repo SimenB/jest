@@ -11,14 +11,12 @@ import * as path from 'node:path';
 import anymatch from 'anymatch';
 import watchman from 'fb-watchman';
 import fs from 'graceful-fs';
-import {
-  ADD_EVENT,
-  ALL_EVENT,
-  CHANGE_EVENT,
-  DELETE_EVENT,
-  isFileIncluded,
-} from './common';
+import * as common from './common';
 
+const CHANGE_EVENT = common.CHANGE_EVENT;
+const DELETE_EVENT = common.DELETE_EVENT;
+const ADD_EVENT = common.ADD_EVENT;
+const ALL_EVENT = common.ALL_EVENT;
 const SUB_NAME = 'jest-haste-map';
 
 // Dedupe repeated "Recrawled this watch N times" warnings from watchman.
@@ -263,7 +261,7 @@ WatchmanWatcher.prototype.handleFileChange = function (changeDescriptor) {
 
   if (
     !(self.capabilities.wildmatch && !this.hasIgnore) &&
-    !isFileIncluded(this.globs, this.dot, this.doIgnore, relativePath)
+    !common.isFileIncluded(this.globs, this.dot, this.doIgnore, relativePath)
   ) {
     return;
   }
