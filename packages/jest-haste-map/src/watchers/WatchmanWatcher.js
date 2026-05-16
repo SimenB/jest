@@ -61,7 +61,6 @@ export default function WatchmanWatcher(dir, opts) {
   opts = opts || {};
   this.globs = opts.glob || [];
   this.dot = opts.dot || false;
-  this.ignored = opts.ignored || false;
   if (!Array.isArray(this.globs)) {
     this.globs = [this.globs];
   }
@@ -94,7 +93,9 @@ WatchmanWatcher.prototype.init = function () {
   });
   this.client.on('subscription', this.handleChangeEvent.bind(this));
   this.client.on('end', () => {
-    console.warn('[sane] Warning: Lost connection to watchman, reconnecting..');
+    console.warn(
+      '[jest-haste-map] Warning: Lost connection to watchman, reconnecting..',
+    );
     self.init();
   });
 
@@ -178,10 +179,10 @@ WatchmanWatcher.prototype.init = function () {
         }
       } else {
         options.expression = ['anyof'];
-        for (const i in self.globs) {
+        for (const glob of self.globs) {
           options.expression.push([
             'match',
-            self.globs[i],
+            glob,
             'wholename',
             {
               includedotfiles: self.dot,
